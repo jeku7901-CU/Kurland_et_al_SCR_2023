@@ -1,0 +1,1761 @@
+# Functions
+
+### gene.plotting.function
+```{r}
+ # sce = sce.branch2.aged.young.FULL
+ # genelist = unique(glycolysis.not.diff)
+#genelist = unique(not.diff)
+#genelist <- unique(pathway.list$`electron transport chain`)
+#sce = sce.branch2.sub1.aged.young
+
+gene.plotting.function <- function(genelist, 
+                                     sce, 
+                                     normalize = 1, 
+                                     print.genelist.for = NULL, 
+                                     print.list = T, 
+                                     cols = mets.cols,
+                                     title = "",
+                                     NA.0.correction = T, 
+                                     size = 1, 
+                                     text.size = 8, 
+                                   top.margin = 2, 
+                                   left.margin = -8,
+                                   right.margin = 3, 
+                                   y.2.decimals = T,
+                                   y.NO.decimals = T)
+{
+
+##plotting loop
+  
+    # remove genes that are not in the sce
+    if (any(genelist %in% rownames(sce) == FALSE) == TRUE)
+      {
+      genelist <- genelist[-which(genelist %nin% rownames(sce))]
+      }
+    
+    ysmooth <- predictSmooth(models = sce, gene = genelist, nPoints = 20)
+     
+    ymooth.spread <- spread(ysmooth, key = gene, value = yhat)
+    
+    ymooth.spread.l1.time <- ymooth.spread[1:20, 3:ncol(ymooth.spread)]
+    ymooth.spread.l2.time <- ymooth.spread[21:40, 3:ncol(ymooth.spread)]
+    
+    if (NA.0.correction == T){
+    ymooth.spread.l1.time <- ymooth.spread.l1.time[,-which(is.na(ymooth.spread.l1.time[5,]) | ymooth.spread.l1.time[5,] == 0  )]
+    ymooth.spread.l2.time <- ymooth.spread.l2.time[,-which(is.na(ymooth.spread.l2.time[5,]) | ymooth.spread.l2.time[5,] == 0  )]
+    }
+        
+    sderr.l1 <- rowSds(as.matrix(ymooth.spread.l1.time)) / sqrt(ncol(as.matrix(ymooth.spread.l1.time)))
+        
+    ymooth.spread.l1.mean <- data.frame(time = seq(1:20),
+                                        lineage = rep("Aged", 20), 
+                                        line.mean = rowMeans(ymooth.spread.l1.time),
+                                        
+                                        sderr = sderr.l1,
+                                        sd.high = rowMeans(ymooth.spread.l1.time) + sderr.l1,
+                                        sd.low = rowMeans(ymooth.spread.l1.time) - sderr.l1,
+                                        row.names = NULL)
+                            
+    
+    sderr.l2 <- rowSds(as.matrix(ymooth.spread.l2.time)) / sqrt(ncol(as.matrix(ymooth.spread.l2.time)))
+
+    ymooth.spread.l2.mean <- data.frame(time = seq(1:20),
+                                        lineage = rep("Young", 20), 
+                                        line.mean = rowMeans(ymooth.spread.l2.time),
+                                        
+                                        sderr = rowSds(as.matrix(ymooth.spread.l2.time)) / sderr.l2,
+                                        sd.high = rowMeans(ymooth.spread.l2.time) + sderr.l2,
+                                        sd.low = rowMeans(ymooth.spread.l2.time) - sderr.l2,
+                                        row.names = NULL)
+      
+    genes.l1.l2.means <-rbind(ymooth.spread.l1.mean, ymooth.spread.l2.mean)
+        
+        # gene plot
+  if (y.2.decimals == T) {
+     ggplot() + 
+     geom_line(data = genes.l1.l2.means, aes(x = time, y = line.mean, color = lineage), size = size)  + 
+     #geom_ribbon(data = genes.l1.l2.means, aes(x = time, ymin = sd.low, ymax = sd.high, fill=lineage,), color = 'black',outline.type = "both", size = 0.1, alpha=0.2) + 
+     scale_fill_manual(values = c(cols), 
+                       breaks = c("Aged", "Young"))+
+     scale_color_manual(values = c(cols),
+                       breaks = c("Aged", "Young"))+ theme_classic() +
+
+    
+    theme(axis.text.x = element_text(size = text.size)) +     
+    theme(axis.text.y = element_text(size = text.size)) +
+    theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_text(size = text.size, margin = margin(t = 0, r = 0, b = 0, l = left.margin))) + 
+    theme(plot.margin = margin(t = top.margin,  # Top margin
+                             r = right.margin,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) + # Left margin 
+    scale_y_continuous(labels = scales::number_format(accuracy = 0.1, decimal.mark = '.')) + 
+       NoLegend()+
+    ggtitle(title) + 
+      xlab(NULL) + 
+      ylab(NULL) 
+  }
+    
+      if (y.NO.decimals == T) {
+     ggplot() + 
+     geom_line(data = genes.l1.l2.means, aes(x = time, y = line.mean, color = lineage), size = size)  + 
+     #geom_ribbon(data = genes.l1.l2.means, aes(x = time, ymin = sd.low, ymax = sd.high, fill=lineage,), color = 'black',outline.type = "both", size = 0.1, alpha=0.2) + 
+     scale_fill_manual(values = c(cols), 
+                       breaks = c("Aged", "Young"))+
+     scale_color_manual(values = c(cols),
+                       breaks = c("Aged", "Young"))+ theme_classic() +
+
+    
+    theme(axis.text.x = element_text(size = text.size)) +     
+    theme(axis.text.y = element_text(size = text.size)) +
+    theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_text(size = text.size, margin = margin(t = 0, r = 0, b = 0, l = left.margin ))) + 
+    theme(plot.margin = margin(t = top.margin,  # Top margin
+                             r = right.margin,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) + # Left margin 
+    scale_y_continuous(labels = scales::number_format(accuracy = 1)) + 
+       NoLegend()+
+    ggtitle(title) + 
+      xlab(NULL) + 
+      ylab(NULL) 
+      }
+    
+    else (
+           ggplot() + 
+     geom_line(data = genes.l1.l2.means, aes(x = time, y = line.mean, color = lineage), size = size)  + 
+     #geom_ribbon(data = genes.l1.l2.means, aes(x = time, ymin = sd.low, ymax = sd.high, fill=lineage,), color = 'black',outline.type = "both", size = 0.1, alpha=0.2) + 
+     scale_fill_manual(values = c(cols), 
+                       breaks = c("Aged", "Young"))+
+     scale_color_manual(values = c(cols),
+                       breaks = c("Aged", "Young"))+ theme_classic() +
+
+    
+    theme(axis.text.x = element_text(size = text.size)) +     
+    theme(axis.text.y = element_text(size = text.size)) +
+    theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_text(size = text.size, margin = margin(t = 0, r = 0, b = 0, l = left.margin))) + 
+    theme(plot.margin = margin(t = top.margin,  # Top margin
+                             r = right.margin,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) + # Left margin 
+       NoLegend()+
+    ggtitle(title) + 
+      xlab(NULL) + 
+      ylab(NULL) 
+    )
+}
+```
+
+### upstream.tf.plotting.fun
+```{r}
+upstream.tf.plotting.fun <- function(enrich.df.filepath, 
+                                     sce, 
+                                     normalize = 1, 
+                                     print.genelist.for = NULL, 
+                                     print.list = T, 
+                                     cols = mets.cols)
+{
+  enrich.df <- read.csv(file = enrich.df.filepath) 
+
+
+  enrich.df <- enrich.df[order(enrich.df$Combined.Score, decreasing = T),]
+  enrich.df <- enrich.df[which(enrich.df$Adjusted.P.value < 0.05),]
+  
+  #if (nrow(enrich.df) > 50){enrich.df <- enrich.df[1:50, ]}
+
+  
+  ### To turn the enrichr protein names to genes
+  list1 <- list()
+  for (i in 1:nrow(enrich.df))
+    {
+      uppercase.genes <- strsplit(enrich.df$Genes[i], split = ";")
+      
+      for (j in 1:length(uppercase.genes[[1]]))
+      {
+        lower.case.name.half.tmp <- tolower(substring(uppercase.genes[[1]][j], 2))
+        full.format.name <- paste(substring(uppercase.genes[[1]][j], first = 1, last = 1), lower.case.name.half.tmp, sep = "")
+        list1[[paste(enrich.df$Term[i])]][j] <- full.format.name
+      }
+    }
+
+  if (print.list == T) {return(list1)}
+  
+##plotting loop
+for (plot.num in 1:length(list1))
+
+  {
+    genelist <- list1[[plot.num]]
+
+    # remove genes that are not in the sce
+    if (any(list1[[plot.num]] %in% rownames(sce) == FALSE) == TRUE)
+      {
+      genelist <- genelist[-which(list1[[plot.num]] %nin% rownames(sce))]
+      }
+      
+    tf.name <- gene.uppercase.to.lowercase.fun( strsplit(names(list1)[plot.num], split = " ")[[1]][1])
+
+    if (tf.name %in% genelist == T) {genelist <- genelist[-which(tf.name %in% genelist)]}
+    
+      
+    ysmooth <- predictSmooth(models = sce, gene = genelist, nPoints = 20)
+     
+    ymooth.spread <- spread(ysmooth, key = gene, value = yhat)
+    
+    ymooth.spread.l1.time <- ymooth.spread[1:20, 3:ncol(ymooth.spread)]
+    ymooth.spread.l2.time <- ymooth.spread[21:40, 3:ncol(ymooth.spread)]
+        
+    sderr.l1 <- rowSds(as.matrix(ymooth.spread.l1.time)) / sqrt(ncol(as.matrix(ymooth.spread.l1.time)))
+        
+    ymooth.spread.l1.mean <- data.frame(time = seq(1:20),
+                                        lineage = rep("Aged", 20), 
+                                        line.mean = rowMeans(ymooth.spread.l1.time),
+                                        
+                                        sderr = sderr.l1,
+                                        sd.high = rowMeans(ymooth.spread.l1.time) + sderr.l1,
+                                        sd.low = rowMeans(ymooth.spread.l1.time) - sderr.l1,
+                                        row.names = NULL)
+                            
+    
+    sderr.l2 <- rowSds(as.matrix(ymooth.spread.l2.time)) / sqrt(ncol(as.matrix(ymooth.spread.l2.time)))
+
+    ymooth.spread.l2.mean <- data.frame(time = seq(1:20),
+                                        lineage = rep("Young", 20), 
+                                        line.mean = rowMeans(ymooth.spread.l2.time),
+                                        
+                                        sderr = rowSds(as.matrix(ymooth.spread.l2.time)) / sderr.l2,
+                                        sd.high = rowMeans(ymooth.spread.l2.time) + sderr.l2,
+                                        sd.low = rowMeans(ymooth.spread.l2.time) - sderr.l2,
+                                        row.names = NULL)
+      
+    genes.l1.l2.means <-rbind(ymooth.spread.l1.mean, ymooth.spread.l2.mean)
+
+
+    if (ylab == T){
+      
+ 
+        print(   
+         ggplot(genes.l1.l2.means, aes(x = time, y = line.mean, color = lineage)) + 
+         geom_line(size = 2) + 
+         ggtitle(paste(names(list1[plot.num]), ':' , length(genelist), sep = "")) +
+         scale_fill_manual(values = c(mets.cols), breaks = c("Aged", "Young"))+
+         scale_color_manual(values = c(mets.cols),breaks = c("Aged", "Young"))+
+         geom_ribbon( aes(x = time, ymin = sd.low, ymax = sd.high, fill=lineage,), color = 'black',outline.type = "both", size = 0.1, alpha=0.5) + 
+         theme_classic()) 
+    }
+    
+    else(
+              print(   
+         ggplot(genes.l1.l2.means, aes(x = time, y = line.mean, color = lineage)) + 
+         geom_line(size = 2) + 
+         ggtitle(paste(names(list1[plot.num]), ':' , length(genelist), sep = "")) +
+         scale_fill_manual(values = c(mets.cols), breaks = c("Aged", "Young"))+
+         scale_color_manual(values = c(mets.cols),breaks = c("Aged", "Young"))+
+         geom_ribbon( aes(x = time, ymin = sd.low, ymax = sd.high, fill=lineage,), color = 'black',outline.type = "both", size = 0.1, alpha=0.5) + 
+         theme_classic() + 
+           theme(axis.text.y = element_blank()))
+    )
+  }
+}
+```
+
+```{r}
+load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/sce_branch1_aged_young_FULL.RData")
+load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/sce_branch2_sub1_aged_young.RData")
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+branch1_archs4tf_TFs <- upstream.tf.plotting.fun(enrich.df.filepath =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/ARCHS4_TFs_Coexp_table_BRANCH1_updated.csv", 
+                                                 sce = sce.branch1.aged.young.FULL, print.list = T)
+
+branch2_archs4tf_TFs <- upstream.tf.plotting.fun(enrich.df.filepath =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/ARCHS4_TFs_Coexp_table_BRANCH2_updated.csv",
+                          sce = sce.branch2.sub1.aged.young, print.list = T)
+
+branch1.name.vec <- c()
+for (i in 1:length(names(branch1_archs4tf_TFs)[1:100]))
+{
+  tmp.name <- strsplit(names(branch1_archs4tf_TFs)[i], split = " ")[[1]][1]
+  branch1.name.vec[i] <- c(tmp.name)
+}
+
+branch2.name.vec <- c()
+for (i in 1:length(names(branch2_archs4tf_TFs)[1:100]))
+{
+  tmp.name <- strsplit(names(branch2_archs4tf_TFs)[i], split = " ")[[1]][1]
+  branch2.name.vec[i] <- c(tmp.name)
+}
+
+```
+
+
+
+### Intersection table - Branch2
+```{r}
+TF.branch.gene.list <- branch2_archs4tf_TFs
+
+dims <- 100
+interct.df.branch2 <- matrix(nrow = dims, ncol = dims)
+tf1.unique <- matrix(nrow = dims, ncol = dims)
+tf2.unique <- matrix(nrow = dims, ncol = dims)
+
+matrix.list <- list()
+
+new.names <- branch2.name.vec
+
+for (i in 1:dims)
+{
+  for (j in 1:ncol(interct.df.branch2))
+  {
+    tf1 <- new.names[i]
+    tf2 <- new.names[j]
+    
+    tf1.genes <- TF.branch.gene.list[grep(tf1, names(TF.branch.gene.list))][[1]]
+    tf2.genes <- TF.branch.gene.list[grep(tf2, names(TF.branch.gene.list))][[1]]
+
+    
+    # interct.df.branch2[i,j] <- length(which(tf1.genes %in% tf2.genes))
+    # tf1.unique[i,j] <- length(which(tf1.genes %nin% tf2.genes))
+    # tf2.unique[i,j] <- length(which(tf2.genes %nin% tf1.genes))
+    
+    ### Percentages
+    interct.df.branch2[i,j] <- (length(which(tf1.genes %in% tf2.genes)) / (length(which(tf1.genes %in% tf2.genes)) + 
+                                                                                     length(which(tf1.genes %nin% tf2.genes)) + 
+                                                                                     length(which(tf2.genes %nin% tf1.genes)))) * 100
+
+  }
+}
+rownames(interct.df.branch2) <- new.names
+colnames(interct.df.branch2) <- new.names
+
+
+```
+
+### Intersection table - Branch1
+```{r}
+TF.branch.gene.list <- branch1_archs4tf_TFs
+
+dims <- 100
+interct.df.branch1 <- matrix(nrow = dims, ncol = dims)
+# tf1.unique <- matrix(nrow = dims, ncol = dims)
+# tf2.unique <- matrix(nrow = dims, ncol = dims)
+
+new.names <- branch1.name.vec
+
+
+for (i in 1:dims)
+{
+  for (j in 1:dims)
+  {
+    tf1 <- new.names[i]
+    tf2 <- new.names[j]
+    
+    tf1.genes <- TF.branch.gene.list[grep(tf1, names(TF.branch.gene.list))][[1]]
+    tf2.genes <- TF.branch.gene.list[grep(tf2, names(TF.branch.gene.list))][[1]]
+
+    # raw numbers
+      # interct.df.clust.branch1[i,j] <- length(which(tf1.genes %in% tf2.genes))
+      # tf1.unique[i,j] <- length(which(tf1.genes %nin% tf2.genes))
+      # tf2.unique[i,j] <- length(which(tf2.genes %nin% tf1.genes))
+    
+    # percentages
+      interct.df.branch1[i,j] <- (length(which(tf1.genes %in% tf2.genes)) / (length(which(tf1.genes %in% tf2.genes)) + 
+                                                                                     length(which(tf1.genes %nin% tf2.genes)) + 
+                                                                                     length(which(tf2.genes %nin% tf1.genes)))) * 100
+
+  }
+}
+rownames(interct.df.branch1) <- new.names
+colnames(interct.df.branch1) <- new.names
+
+```
+
+
+```{r}
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+mets.cols <- c( '#FF5910', '#002D72')
+```
+
+
+### RUN HERE  ^^^
+### Fig3 -- trajectory plots for TF subgroups
+
+#### Patterntests -- top1000 genes go into Enrichr for Archs4_TF database
+```{r}
+# Branch1
+load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/sce_branch1_aged_young_FULL.RData")
+patterntest.branch1.full <- patternTest(sce.branch1.aged.young.FULL, l2fc = log2(1))
+
+patterntest.branch1.full.sig <- patterntest.branch1.full[which(patterntest.branch1.full$pvalue < 0.05), ]
+patterntest.branch1.full.sig.ordered <- patterntest.branch1.full.sig[order(patterntest.branch1.full.sig$waldStat, decreasing = TRUE),]
+
+write.genelist.fun(gene.list = rownames(patterntest.branch1.full.sig.ordered)[1:1000],
+                   filename =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch1_patterntest_ordered.txt",
+                   paste = 0)
+
+# Branch2 -- on myonuclear subset
+load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/sce_branch2_sub1_aged_young.RData")
+patterntest.branch2.subset <- patternTest(sce.branch2.sub1.aged.young, l2fc = log2(1))
+
+patterntest.branch2.subset.sig <- patterntest.branch2.subset[which(patterntest.branch2.subset$pvalue < 0.05), ]
+patterntest.branch2.subset.sig.ordered <- patterntest.branch2.subset.sig[order(patterntest.branch2.subset.sig$waldStat, decreasing = TRUE),]
+
+write.genelist.fun(gene.list = rownames(patterntest.branch2.subset.sig.ordered)[1:1000],
+                   filename =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch2_SUBSET_patterntest_ordered.txt",
+                   paste = 0)
+```
+
+
+#### Branch1/Branch2 TF overlap
+```{r}
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+branch1_archs4tf_TFs <- upstream.tf.plotting.fun(enrich.df.filepath =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/ARCHS4_TFs_Coexp_table_BRANCH1_updated.csv", 
+                                                 sce = sce.branch1.aged.young.FULL, print.list = T)
+
+branch2_archs4tf_TFs <- upstream.tf.plotting.fun(enrich.df.filepath =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/ARCHS4_TFs_Coexp_table_BRANCH2_updated.csv",
+                          sce = sce.branch2.sub1.aged.young, print.list = T)
+```
+
+##### Branch1 and Branch2 overlap
+```{r}
+branch1.name.vec <- c()
+for (i in 1:length(names(branch1_archs4tf_TFs)[1:100]))
+{
+  tmp.name <- strsplit(names(branch1_archs4tf_TFs)[i], split = " ")[[1]][1]
+  branch1.name.vec[i] <- c(tmp.name)
+}
+
+branch2.name.vec <- c()
+for (i in 1:length(names(branch2_archs4tf_TFs)[1:100]))
+{
+  tmp.name <- strsplit(names(branch2_archs4tf_TFs)[i], split = " ")[[1]][1]
+  branch2.name.vec[i] <- c(tmp.name)
+}
+
+length(which(branch1.name.vec %in% branch2.name.vec))
+branch1.name.vec[branch1.name.vec %nin% branch2.name.vec]
+print("BRANCH2")
+branch2.name.vec[branch2.name.vec %nin% branch1.name.vec]
+```
+
+### Branch1 plotting - not saving
+```{r}
+for (i in 1:length(names(branch1_archs4tf_TFs)[1:100]))
+{
+  gene.plotting.function(genelist = branch1_archs4tf_TFs[[i]], sce = sce.branch1.aged.young.FULL, print.list = F, title = names(branch1_archs4tf_TFs)[i], NA.0.correction = 0)
+}
+```
+
+### Fig3 -- gene trajectories for heatmap groups
+```{r}
+TF.list <- c('TWIST1', 'OSR1', 'NFATC4', 'TBX18', 'TBX5', 'OSR2')
+for (i in 1:length(TF.list))
+{
+  gene.plotting.function(genelist = branch1_archs4tf_TFs[grep(TF.list[i], names(branch1_archs4tf_TFs))][[1]],  sce = sce.branch1.aged.young.FULL, print.list = F, title = names(branch1_archs4tf_TFs)[i], NA.0.correction = 0)
+
+}
+```
+
+
+##### Branch1 TF plots into combined PDF
+```{r}
+pdf(file = paste(dir1, 'Branch1_TFs_combined.pdf', sep = "") ,width = 11, height = 8, onefile = TRUE, )
+
+for (i in 1:length(names(branch2_archs4tf_TFs)[1:100]))
+{
+  dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+  gene.plotting.function(genelist = branch1_archs4tf_TFs[[i]], sce = sce.branch1.aged.young.FULL, print.list = F, title = names(branch1_archs4tf_TFs)[i], NA.0.correction = 0)
+}
+
+dev.off()
+```
+
+
+### Branch2 plotting - saving
+```{r}
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+pdf(file = paste(dir1, 'Branch2_TFs_combined.pdf', sep = "") ,width = 11, height = 8, onefile = TRUE, )
+
+for (i in 1:length(names(branch2_archs4tf_TFs)))
+{
+  print(gene.plotting.function(genelist = branch2_archs4tf_TFs[[i]], sce = sce.branch2.sub1.aged.young, print.list = F, title = names(branch2_archs4tf_TFs)[i], NA.0.correction = 0))
+}
+
+dev.off()
+```
+
+# TRY tradeseq clustering...lines for me
+```{r}
+#library(clusterExperiment)
+
+nPointsClus <- 20
+sce <- sce.branch1.aged.young.FULL
+clusPat <- clusterExpressionPatterns(sce, nPoints = nPointsClus,
+                                     genes = rownames(patterntest.branch1.full.sig.ordered)[1:1000])
+```
+
+### Intersection table - branch1 -- HEATMAP
+```{r}
+TF.branch.gene.list <- branch1_archs4tf_TFs
+
+dims <- 100
+interct.df.branch1 <- matrix(nrow = dims, ncol = dims)
+# tf1.unique <- matrix(nrow = dims, ncol = dims)
+# tf2.unique <- matrix(nrow = dims, ncol = dims)
+
+new.names <- branch1.name.vec
+
+
+for (i in 1:dims)
+{
+  for (j in 1:dims)
+  {
+    tf1 <- new.names[i]
+    tf2 <- new.names[j]
+    
+    tf1.genes <- TF.branch.gene.list[grep(tf1, names(TF.branch.gene.list))][[1]]
+    tf2.genes <- TF.branch.gene.list[grep(tf2, names(TF.branch.gene.list))][[1]]
+
+    # raw numbers
+      # interct.df.clust.branch1[i,j] <- length(which(tf1.genes %in% tf2.genes))
+      # tf1.unique[i,j] <- length(which(tf1.genes %nin% tf2.genes))
+      # tf2.unique[i,j] <- length(which(tf2.genes %nin% tf1.genes))
+    
+    # percentages
+      interct.df.branch1[i,j] <- (length(which(tf1.genes %in% tf2.genes)) / (length(which(tf1.genes %in% tf2.genes)) + 
+                                                                                     length(which(tf1.genes %nin% tf2.genes)) + 
+                                                                                     length(which(tf2.genes %nin% tf1.genes)))) * 100
+
+  }
+}
+rownames(interct.df.branch1) <- new.names
+colnames(interct.df.branch1) <- new.names
+heatmap(interct.df.branch1 )
+
+#### clustering
+# interct.df.branch1.clust <- interct.df.branch1
+# 
+dist.mat <- dist(interct.df.branch1)
+Hierar_cl.branch1 <- hclust(dist.mat)
+plot(Hierar_cl.branch1)
+heatmap(interct.df.branch1,  )
+
+coul <- colorRampPalette(brewer.pal(8, "YlOrRd"))(50)
+
+heatmap.2(interct.df.branch1,
+          trace = 'none', 
+          density.info='none', 
+          breaks =seq.int(0, 100, by = 2), 
+          col = coul)
+
+```
+
+
+#### Saving Branch1 heatmap
+```{r}
+coul <- colorRampPalette(brewer.pal(8, "YlOrRd"))(50)
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+pdf(file = paste(dir1, 'Branch1_heatmap_asp.pdf', sep = "") ,width = 4, height = 4)
+
+heatmap.2(interct.df.branch1,
+          trace = 'none', 
+          density.info='none', 
+          breaks =seq.int(0, 100, by = 2), 
+          col = coul, asp = T,
+          lmat=rbind(c(0,3), c(2,1) ),
+          lhei=rbind(c(1,5)))
+dev.off()
+
+```
+
+### Intersection table - Branch2
+```{r}
+TF.branch.gene.list <- branch2_archs4tf_TFs
+
+dims <- 100
+interct.df.branch2 <- matrix(nrow = dims, ncol = dims)
+tf1.unique <- matrix(nrow = dims, ncol = dims)
+tf2.unique <- matrix(nrow = dims, ncol = dims)
+
+matrix.list <- list()
+
+new.names <- branch2.name.vec
+
+for (i in 1:dims)
+{
+  for (j in 1:ncol(interct.df.branch2))
+  {
+    tf1 <- new.names[i]
+    tf2 <- new.names[j]
+    
+    tf1.genes <- TF.branch.gene.list[grep(tf1, names(TF.branch.gene.list))][[1]]
+    tf2.genes <- TF.branch.gene.list[grep(tf2, names(TF.branch.gene.list))][[1]]
+
+    
+    # interct.df.branch2[i,j] <- length(which(tf1.genes %in% tf2.genes))
+    # tf1.unique[i,j] <- length(which(tf1.genes %nin% tf2.genes))
+    # tf2.unique[i,j] <- length(which(tf2.genes %nin% tf1.genes))
+    
+    ### Percentages
+    interct.df.branch2[i,j] <- (length(which(tf1.genes %in% tf2.genes)) / (length(which(tf1.genes %in% tf2.genes)) + 
+                                                                                     length(which(tf1.genes %nin% tf2.genes)) + 
+                                                                                     length(which(tf2.genes %nin% tf1.genes)))) * 100
+
+  }
+}
+rownames(interct.df.branch2) <- new.names
+colnames(interct.df.branch2) <- new.names
+
+
+#### clustering
+
+coul.branch2 <- colorRampPalette(brewer.pal(8, "RdPu"))(50)
+
+heatmap.2(interct.df.branch2,
+          trace = 'none', 
+          density.info='none',,
+          key.title = NULL,
+          key.ylab = NULL,
+          breaks =seq.int(0, 100, by = 2), 
+          col = coul.branch2, 
+          lmat=rbind(c(4,3), c(2,1) ),
+          lhei=rbind(c(1,3)))
+
+
+# dist.mat <- dist(interct.df.branch2, method = 'euclidean')
+# Hierar_cl.branch2 <- hclust(dist.mat, method = "average")
+# plot(Hierar_cl.branch2)
+# interct.df.branch2.clust <- interct.df.branch2[Hierar_cl.branch2$order, ]
+#write.csv(interct.df.clust, file = "~/Desktop/interset_df_test.csv")
+
+
+```
+
+
+#### Saving Branch2 heatmap
+```{r}
+coul.branch2 <- colorRampPalette(brewer.pal(8, "RdPu"))(50)
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+pdf(file = paste(dir1, 'Branch2_heatmap_asp.pdf', sep = "") ,width = 4, height = 4)
+
+heatmap.2(interct.df.branch2,
+          trace = 'none', 
+          density.info='none',
+          key = F,
+          key.title = NULL,
+          key.ylab = NULL,
+          breaks =seq.int(0, 100, by = 2), 
+          col = coul.branch2, asp = T,
+          lmat=rbind(c(0,3), c(2,1) ),
+          lhei=rbind(c(1,5)))
+
+dev.off()
+
+```
+
+### Overlap heatmap
+```{r}
+TF.branch1.gene.list <- branch1_archs4tf_TFs
+TF.branch2.gene.list <- branch2_archs4tf_TFs
+
+
+dims <- 63
+interct.df.branch1.branch2 <- matrix(nrow = dims, ncol = dims)
+
+new.names <- branch1.name.vec[which(branch1.name.vec %in% branch2.name.vec)]
+
+for (i in 1:dims)
+{
+  for (j in 1:dims)
+  {
+    tf1 <- new.names[i]
+    tf2 <- new.names[j]
+    
+    tf1.genes <- TF.branch.gene.list[grep(tf1, names(TF.branch1.gene.list))][[1]]
+    tf2.genes <- TF.branch.gene.list[grep(tf2, names(TF.branch2.gene.list))][[1]]
+
+    
+    interct.df.branch1.branch2[i,j] <- length(which(tf1.genes %in% tf2.genes)) / length(tf1.genes) * 100
+
+  }
+}
+rownames(interct.df.branch1.branch2) <- new.names
+colnames(interct.df.branch1.branch2) <- new.names
+
+#### clustering
+# coul <- colorRampPalette(brewer.pal(8, "YlOrRd"))(100)
+# heatmap(interct.df.branch1.branch2.clust, col = coul)
+# 
+# 
+# dist.mat <- dist(interct.df.branch1.branch2, method = 'euclidean')
+# Hierar_cl.branch1.branch2 <- hclust(dist.mat, method = "average")
+# plot(Hierar_cl.branch1.branch2)
+# interct.df.branch1.branch2.clust <- interct.df.branch1.branch2[Hierar_cl.branch1.branch2$order, ]
+# 
+# 
+# heatmap(interct.df.branch1.branch2.clust)
+# legend(x="right", fill = colorRampPalette(brewer.pal(8, "YlOrRd"))(3), legend = c("0%", "50%", "100%"))
+
+#coul.overlap <- colorRampPalette(brewer.pal(8, "viridis"))(100)
+
+heatmap.2(interct.df.branch1.branch2,
+          trace = 'none', 
+          density.info='none', 
+          breaks =seq.int(0, 100, by = 2), 
+          col = redgreen(50),
+          lmat=rbind(c(0,3), c(2,1) ),
+          lhei=rbind(c(1,5)))
+
+```
+#### Saving Branch1/Branch2 heatmap
+```{r}
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+pdf(file = paste(dir1, 'Branch1_Branch2_heatmap.pdf', sep = "") ,width = 12, height = 12)
+heatmap.2(interct.df.branch1.branch2,
+          trace = 'none', 
+          density.info='none', 
+          breaks =seq.int(0, 100, by = 2), 
+          col = redgreen(50),
+          asp = T,
+          lmat=rbind(c(0,3), c(2,1) ),
+          lhei=rbind(c(1,8)),
+          lwid=rbind(c(1,8)))
+dev.off()
+
+```
+
+
+
+
+
+#### subsetting dendrogram and plotting clades 
+
+##### Clade 1 (bottom)
+```{r}
+df.branch1 <- data.frame(TF = Hierar_cl.branch1$labels, order = Hierar_cl.branch1$order)
+df.branch1[order(df.branch1$order),]
+
+df.branch2 <- data.frame(TF = Hierar_cl.branch2$labels, order = Hierar_cl.branch2$order)
+
+# TF.list <- tmp.df$TF[79:100]
+# for (i in 1:length(TF.list))
+# {
+#   gene.plotting.function(genelist = branch2_archs4tf_TFs[grep(TF.list[i], names(branch2_archs4tf_TFs) )][[1]], 
+#                        sce = sce.branch2.sub1.aged.young, 
+#                        print.genelist.for = F, 
+#                        cols = mets.cols,
+#                        NA.0.correction = F, size = 1, title = names(branch2_archs4tf_TFs)[i]) 
+# }
+
+```
+
+```{r}
+df.branch1[which(df.branch1$TF == 'MEF2A'), ]
+```
+
+
+
+### plotly
+```{r}
+library(plotly)
+install.packages("dendextend")
+library(dendextend)
+devtools::install_github("rstudio/d3heatmap")
+library(d3heatmap)
+
+p <- ggplot(Hierar_cl.branch2)
+
+dend <- as.dendrogram(Hierar_cl.branch2)
+ggplotly(dend)
+plot(dend)
+
+```
+
+```{r}
+df.branch1 <- data.frame(TF = Hierar_cl.branch1$labels, order = Hierar_cl.branch1$order, height = c(0, Hierar_cl.branch1$height))
+df.branch1[order(df.branch1$order),]
+
+dend <- as.dendrogram(Hierar_cl.branch1)
+plot(dend)
+
+#cut(dend, h = 150)
+plot(cut(dend, h = 99)$lower[[2]])
+
+```
+
+### BRanch1 and branch2 patterntest overlap and branch2-specific genes
+```{r}
+branch1.branch2.overlap <- rownames(patterntest.branch1.full.sig.ordered)[which(rownames(patterntest.branch1.full.sig.ordered)[1:1000] %in% rownames(patterntest.branch2.subset.sig.ordered)[1:1000])]
+write.genelist.fun(branch1.branch2.overlap, 
+                   paste = 0,filename = '~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch1_branch2_patterntest_overlap.txt')
+                   
+branch2.specific <- rownames(patterntest.branch2.subset.sig.ordered)[which(rownames(patterntest.branch2.subset.sig.ordered)[1:1000] %nin% rownames(patterntest.branch1.full.sig.ordered)[1:1000])]
+write.genelist.fun(branch2.specific, 
+                   paste = 0,filename = '~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch2_specific_patterntest.txt')
+```
+
+#### branch1 and branch2 overlap and specific genes from patterntest
+
+### Reading in panther file -- modified for some reason...
+```{r}
+result <- fromJSON(file = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/json_files/branch1_branch2_patterntest_overlap.json")
+
+# result <- fromJSON(file = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/panther_process_dtw_biggest_diff.json")
+
+
+pathway.list.overlap <- list()
+for (category in 1:length(result$overrepresentation$result))
+{
+  for (sub.category in 1:length(result$overrepresentation$result[[category]]))
+  {
+    
+  if (is.numeric(result$overrepresentation$result[[category]]$number_in_reference) == TRUE) {
+    genelist <- result$overrepresentation$result[[category]]$input_list$mapped_id_list$mapped_id
+    name <- paste(result$overrepresentation$result[[category]]$term$label, result$overrepresentation$group[[category]]$result$input_list$fold_enrichment, sep = '_')
+    pathway.list.overlap[[name]] <- genelist
+  }
+    
+    else{
+    genelist <- result$overrepresentation$result[[category]][[sub.category]]$mapped_id_list$mapped_id
+    name <- paste(result$overrepresentation$result[[category]][[sub.category]]$term$label, as.numeric(result$overrepresentation$group[[category]]$result[[sub.category]]$input_list$fold_enrichment), sep = '_')
+    pathway.list.overlap[[name]] <- genelist
+    }
+  }
+}
+
+```
+
+# plotting -- branch1/branch2 overlap
+```{r}
+genelist = pathway.list.overlap$`T-tubule organization_`
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+text.size <- 8
+
+  pdf(file = paste(dir1, 'gene_pseudotime_plot_','T-tubule organization', 'overlap', '.pdf', sep = "") ,width = 1.3, height = 1.1)
+
+
+ gene.plotting.function(genelist = genelist,print.list = F, size = 1, text.size = 8, cols = mets.cols, sce = sce.branch2.sub1.aged.young, title = NULL, NA.0.correction = F, top.margin = 2.5)
+
+dev.off()
+```
+
+```{r}
+genelist = pathway.list.overlap$`regulation of cardiac muscle contraction by calcium ion signaling_`
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+text.size <- 8
+
+  pdf(file = paste(dir1, 'gene_pseudotime_plot_','regulation of cardiac muscle contraction by calcium ion signaling_', 'overlap', '.pdf', sep = "") ,width = 1.3, height = 1.1)
+
+
+gene.plotting.function(genelist = genelist,print.list = F, size = 1, text.size = 8, cols = mets.cols, sce = sce.branch2.sub1.aged.young, title = NULL, NA.0.correction = F, top.margin = 1, y.2.decimals = F, y.NO.decimals = T)
+dev.off()
+```
+
+```{r}
+genelist = pathway.list.overlap$`myofibril assembly_`
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+text.size <- 8
+
+  pdf(file = paste(dir1, 'gene_pseudotime_plot_','myofibril assembly_', 'overlap', '.pdf', sep = "") ,width = 1.3, height = 1.1)
+
+
+gene.plotting.function(genelist = genelist, print.list = F, size = 1, text.size = 8, cols = mets.cols, sce = sce.branch2.sub1.aged.young, title = NULL, NA.0.correction = F, top.margin = 1)
+
+dev.off()
+```
+
+```{r}
+genelist = pathway.list.overlap$`sarcoplasmic reticulum calcium ion transport_`
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+text.size <- 8
+
+  pdf(file = paste(dir1, 'gene_pseudotime_plot_','sarcoplasmic reticulum calcium ion transport_', 'overlap', '.pdf', sep = "") ,width = 1.3, height = 1.1)
+
+
+gene.plotting.function(genelist = genelist, print.list = F, size = 1, text.size = 8, cols = mets.cols, sce = sce.branch2.sub1.aged.young, title = NULL, NA.0.correction = F, top.margin = 1)
+
+dev.off()
+
+
+```
+
+### only categories with more genes
+```{r}
+vec <- c()
+for (i in 1:length(pathway.list))
+{
+  vec[i] <- length(pathway.list[[i]])
+}
+
+df <- data.frame(length = vec, order = seq(1:length(vec)))
+df <- df[order(df$length, decreasing = T),]
+
+pathway.list2 <- pathway.list[df$order]
+```
+
+# BRANCH2 SPECIFIC
+### Reading in panther file (non-modified)-- branch2.specific
+```{r}
+result <- fromJSON(file = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/json_files/branch2_subset_patterntest_specific_panther_process.json")
+
+# result <- fromJSON(file = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/panther_process_dtw_biggest_diff.json")
+
+
+pathway.list.branch2.specific <- list()
+for (category in 1:length(result$overrepresentation$group))
+{
+  for (sub.category in 1:length(result$overrepresentation$group[[category]]$result))
+  {
+    
+  if (is.numeric(result$overrepresentation$group[[category]]$result$number_in_reference) == TRUE) {
+    genelist <- result$overrepresentation$group[[category]]$result$input_list$mapped_id_list$mapped_id
+    name <- result$overrepresentation$group[[category]]$result$term$label
+    pathway.list.branch2.specific[[name]] <- genelist
+  }
+    
+    else{
+    genelist <- result$overrepresentation$group[[category]]$result[[sub.category]]$input_list$mapped_id_list$mapped_id
+    name <- result$overrepresentation$group[[category]]$result[[sub.category]]$term$label
+    pathway.list.branch2.specific[[name]] <- genelist
+    }
+  }
+}
+```
+
+
+```{r}
+genelist = pathway.list.branch2.specific$`tricarboxylic acid cycle`
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+text.size <- 8
+
+  pdf(file = paste(dir1, 'gene_pseudotime_plot_','tricarboxylic acid cycle_', 'branch2_specific', '.pdf', sep = "") ,width = 1.3, height = 1.1)
+
+
+gene.plotting.function(genelist = genelist, print.list = F, size = 1, text.size = 8, cols = mets.cols, sce = sce.branch2.sub1.aged.young, title = NULL, NA.0.correction = F, top.margin = 1, y.2.decimals = T)
+dev.off()
+```
+
+```{r}
+genelist = pathway.list.branch2.specific$`canonical glycolysis`
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+text.size <- 8
+
+  pdf(file = paste(dir1, 'gene_pseudotime_plot_','canonical glycolysis_', 'branch2_specific', '.pdf', sep = "") ,width = 1.3, height = 1.1)
+
+
+gene.plotting.function(genelist = genelist, print.list = F, size = 1, text.size = 8, cols = mets.cols, sce = sce.branch2.sub1.aged.young, title = NULL, NA.0.correction = F, top.margin = 1)
+dev.off()
+```
+
+```{r}
+genelist = pathway.list.branch2.specific$`mitochondrial electron transport, ubiquinol to cytochrome c`
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+text.size <- 8
+
+  pdf(file = paste(dir1, 'gene_pseudotime_plot_','mitochondrial electron transport, ubiquinol to cytochrome c_', 'branch2_specific', '.pdf', sep = "") ,width = 1.3, height = 1.1)
+
+
+gene.plotting.function(genelist = genelist, print.list = F, size = 1, text.size = 8, cols = mets.cols, sce = sce.branch2.sub1.aged.young, title = NULL, NA.0.correction = F, top.margin = 2, y.2.decimals = T)
+dev.off()
+```
+
+```{r}
+genelist = pathway.list.branch2.specific$`regulation of adenylate cyclase-activating G protein-coupled receptor signaling pathway`
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+text.size <- 8
+
+  pdf(file = paste(dir1, 'gene_pseudotime_plot_','regulation of adenylate cyclase-activating G protein-coupled receptor signaling pathway_', 'branch2_specific', '.pdf', sep = "") ,width = 1.3, height = 1.1)
+
+
+gene.plotting.function(genelist = genelist, print.list = F, size = 1, text.size = 8, cols = mets.cols, sce = sce.branch2.sub1.aged.young, title = NULL, NA.0.correction = F , top.margin = 2, y.2.decimals = T)
+dev.off()
+```
+
+```{r}
+genelist = pathway.list.branch2.specific$gluconeogenesis
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+text.size <- 8
+
+  pdf(file = paste(dir1, 'gene_pseudotime_plot_','gluconeogenesis_', 'branch2_specific', '.pdf', sep = "") ,width = 1.3, height = 1.1)
+
+
+gene.plotting.function(genelist = genelist, print.list = F, size = 1, text.size = 8, cols = mets.cols, sce = sce.branch2.sub1.aged.young, title = NULL, NA.0.correction = F, top.margin = 2, y.2.decimals = T)
+dev.off()
+
+length(genelist)
+```
+
+# BRANCH1 SPECIFIC
+```{r}
+result <- fromJSON(file = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/json_files/branch1_specific_patterntest_panther_process.json")
+
+# result <- fromJSON(file = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/panther_process_dtw_biggest_diff.json")
+
+
+pathway.list.branch1.specific <- list()
+for (category in 1:length(result$overrepresentation$group))
+{
+  for (sub.category in 1:length(result$overrepresentation$group[[category]]$result))
+  {
+    
+  if (is.numeric(result$overrepresentation$group[[category]]$result$number_in_reference) == TRUE) {
+    genelist <- result$overrepresentation$group[[category]]$result$input_list$mapped_id_list$mapped_id
+    name <- result$overrepresentation$group[[category]]$result$term$label
+    pathway.list.branch1.specific[[name]] <- genelist
+  }
+    
+    else{
+    genelist <- result$overrepresentation$group[[category]]$result[[sub.category]]$input_list$mapped_id_list$mapped_id
+    name <- result$overrepresentation$group[[category]]$result[[sub.category]]$term$label
+    pathway.list.branch1.specific[[name]] <- genelist
+    }
+  }
+}
+```
+
+### Fig3C Figure 3C --- dimensions
+```{r}
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+  pdf(file = paste(dir1, 'gene_pseudotime_plot_', 'synaptic_transmission', '_branch2_subset', '.pdf', sep = "") ,width = 1.5, height = 1)
+
+text.size <- 8
+  print(
+gene.plotting.function(genelist = pathway.list$`modulation of chemical synaptic transmission_1.67726553559879`, 
+                       sce = sce.branch2.sub1.aged.young, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F, 
+                       y.2.decimals = T, 
+                       y.NO.decimals = F, top.margin = -10))
+  
+  dev.off()
+```
+
+### Fig3C Figure 3C ---branch1 --- dimensions
+
+```{r}
+genelist = pathway.list.branch1.specific$`regulation of protein localization to synapse`
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+text.size <- 8
+
+  pdf(file = paste(dir1, 'gene_pseudotime_plot_','regulation of protein localization to synapse_', 'branch1_specific', '.pdf', sep = "") ,width = 1.3, height = 1.1)
+
+
+gene.plotting.function(genelist = genelist,
+                       sce = sce.branch1.aged.young.FULL, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F, 
+                       y.2.decimals = T, 
+                       y.NO.decimals = F, top.margin = -10)
+dev.off()
+```
+
+### Fig3C Figure 3G ---branch2 --- dimensions
+
+```{r}
+genelist = pathway.list.branch2.specific$`canonical glycolysis`
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+text.size <- 8
+
+  pdf(file = paste(dir1, 'gene_pseudotime_plot_','canonical glycolysis_', 'branch2_specific', '.pdf', sep = "") ,width = 1.3, height = 1.1)
+
+
+gene.plotting.function(genelist = genelist,
+                       sce = sce.branch2.sub1.aged.young, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F, 
+                       y.2.decimals = F, 
+                       y.NO.decimals = F, top.margin = -10)
+dev.off()
+```
+
+###  Figure 3H ---branch2 --- dimensions
+```{r}
+genelist = pathway.list.branch2.specific$`mitochondrial electron transport, ubiquinol to cytochrome c`
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+text.size <- 8
+
+  pdf(file = paste(dir1, 'gene_pseudotime_plot_','mitochondrial electron transport, ubiquinol to cytochrome c_', 'branch2_specific', '.pdf', sep = "") ,width = 1.3, height = 1.1)
+
+
+gene.plotting.function(genelist = genelist,
+                       sce = sce.branch2.sub1.aged.young, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F, 
+                       y.2.decimals = F, 
+                       y.NO.decimals = F, top.margin = -10)
+dev.off()
+```
+
+```{r}
+genelist = pathway.list.branch1.specific$`positive regulation of skeletal muscle tissue development`
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+text.size <- 8
+
+  pdf(file = paste(dir1, 'gene_pseudotime_plot_','positive regulation of skeletal muscle tissue development_', 'branch1_specific', '.pdf', sep = "") ,width = 1.3, height = 1.1)
+
+
+gene.plotting.function(genelist = genelist, print.list = F, size = 1, text.size = 8, cols = mets.cols, sce = sce.branch1.aged.young.FULL, title = NULL, NA.0.correction = F, top.margin = 2, y.2.decimals = T)
+dev.off()
+```
+
+
+```{r}
+genelist = pathway.list.branch1.specific$`regulation of cAMP-dependent protein kinase activity`
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+text.size <- 8
+
+  pdf(file = paste(dir1, 'gene_pseudotime_plot_','regulation of cAMP-dependent protein kinase activity_', 'branch1_specific', '.pdf', sep = "") ,width = 1.3, height = 1.1)
+
+
+gene.plotting.function(genelist = genelist, print.list = F, size = 1, text.size = 8, cols = mets.cols, sce = sce.branch1.aged.young.FULL, title = NULL, NA.0.correction = F, top.margin = 2, y.2.decimals = T)
+dev.off()
+
+```
+
+```{r}
+genelist = pathway.list.branch1.specific$`myoblast fusion`
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+text.size <- 8
+
+  pdf(file = paste(dir1, 'gene_pseudotime_plot_','myoblast fusion_', 'branch1_specific', '.pdf', sep = "") ,width = 1.3, height = 1.1)
+
+
+gene.plotting.function(genelist = genelist, print.list = F, size = 1, text.size = 8, cols = mets.cols, sce = sce.branch1.aged.young.FULL, title = NULL, NA.0.correction = F, top.margin = 2, y.2.decimals = T)
+dev.off()
+
+```
+### Dotplot
+```{r}
+branch1.branch2.overlap <- rownames(patterntest.branch1.full.sig.ordered)[which(rownames(patterntest.branch1.full.sig.ordered)[1:1000] %in% rownames(patterntest.branch2.subset.sig.ordered)[1:1000])]
+write.genelist.fun(branch1.branch2.overlap, 
+                   paste = 0,filename = '~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch1_branch2_patterntest_overlap.txt')
+                   
+branch1.specific <- rownames(patterntest.branch1.full.sig.ordered)[which(rownames(patterntest.branch1.full.sig.ordered)[1:1000] %nin% rownames(patterntest.branch2.subset.sig.ordered)[1:1000])]
+write.genelist.fun(branch1.specific, 
+                   paste = 0,filename = '~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch1_specific_patterntest.txt')
+
+branch2.specific <- rownames(patterntest.branch2.subset.sig.ordered)[which(rownames(patterntest.branch2.subset.sig.ordered)[1:1000] %nin% rownames(patterntest.branch1.full.sig.ordered)[1:1000])]
+write.genelist.fun(branch2.specific, 
+                   paste = 0,filename = '~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch2_specific_patterntest.txt')
+
+```
+
+```{r}
+branch1 <- c()
+branch1.2.overlap <-c(33.51)
+branch2 <- c()
+
+
+categories <- c("T.tubule",
+                ) 
+
+fake_data <- data.frame(branch1, branch1.2.overlap, branch2, row.names = categories)
+```
+
+
+### Heatmap green section genelist
+```{r}
+col.tf.genelists <- c('MYOG', 'MEF2C', 'TBX15', 'SORBS2', 'MYF6', 'SIX1', 'MEF2A', 'BNC2', 'TEAD1', 'HOXC10', 'NR1D2', 'PITX2', 'LBX1', 'MYOD1', 'AFF1', 'ASH1L', 'ZBTB16', 'HEYL', 'TBX20', 'DPF3', 'ZNF41', 'NFAT5', 'PRRX1', 'RXRG', 'ZNF704', 'FBN1', 'TBX5', 'PITX3', 'PBX1', 'SOX5', 'ZMAT3', 'PPP2R3B', 'ZBTB38', 'AFF4', 'MAFA', 'RBM20', 'PLXNA4', 'MACF1', 'ELK4')
+
+row.tf.genelists <- c("TEAD4", 'MYOG', 'NFE2L1', 'FOXN3', 'ZBTB16', 'MEF2A', 'KLF9', 'NR1D2', 'DPF3', 'RXRG', 'MYF6', 'TBX15', 'HOXC10', 'SIX1', 'LBX1', 'PPP2R3B', 'MYOD1', 'RBM20', 'MEF2C', 'CUL4A', 'ZNF41', 'SIX4', 'PITX2', 'MAFA', 'DMRT2', 'RORC', 'PITX3', 'GBX1')
+
+
+unique.tf.list <- unique(c(col.tf.genelists, row.tf.genelists)) 
+
+branch.tf.overlap.genes <- c()
+for (i in 1:length(unique.tf.list))
+{
+  branch.tf.overlap.genes <- c(branch.tf.overlap.genes, branch1_archs4tf_TFs[grep(unique.tf.list[i], names(branch1_archs4tf_TFs))][[1]])
+}
+
+branch.tf.overlap.genes.unique <- unique(branch.tf.overlap.genes)
+
+write.genelist.fun(branch.tf.overlap.genes.unique, 
+                   paste = 0,filename = '~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/overlaP_heatmap_green_area_genes.txt')
+```
+
+
+
+
+
+#### Fig S6 (Fig S5 now) - 10 x 10 grid of branch1 and then branch2 TF groups -- works
+```{r}
+p <- heatmap(interct.df.branch1 )
+
+branch1.name.vec.reordered <- branch1.name.vec[rev(p$colInd)]
+p1 <- list()
+
+
+#for (i in 1:10)
+for (i in 1:length(branch1.name.vec.reordered))
+{
+  genelist <- branch1_archs4tf_TFs[grep(branch1.name.vec.reordered[i], names(branch1_archs4tf_TFs))][[1]]
+  
+  #p1[[i]] <- base::print(gene.plotting.function(genelist = genelist, print.list = F, size = 1, text.size = 8, cols = mets.cols, sce = sce.branch1.aged.young.FULL, NA.0.correction = F, top.margin = 2, y.2.decimals = F, title = branch1.name.vec[i]))
+  p1[[i]] <- gene.plotting.function(genelist = genelist, print.list = F, size = 1, text.size = 8, cols = mets.cols, sce = sce.branch1.aged.young.FULL, NA.0.correction = F, top.margin = 2, y.2.decimals = F, title = branch1.name.vec.reordered[i])
+  
+  #p1 + facet_wrap(nrow = 10, ncol = 10)
+  # grid.arrange(p1, p2 ,ncol = 2) 
+  # plot_grid(p1, p2,  ncol=2, align="v")
+}
+#p1
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+text.size <- 8
+
+pdf(file = paste(dir1, 'branch1_TF_100_grid', '.pdf', sep = "") ,width = 9, height = 11)
+
+do.call(grid.arrange, p1)
+dev.off()
+```
+### Fig S6 (Fig S5 now)  -- dimensions -- organized by group -- group1
+```{r}
+p <- heatmap(interct.df.branch1 )
+
+branch1.name.vec.reordered <- branch1.name.vec[rev(p$colInd)]
+p1 <- list()
+
+
+for (i in 1:27)
+#for (i in 1:length(branch1.name.vec.reordered))
+{
+  genelist <- branch1_archs4tf_TFs[grep(branch1.name.vec.reordered[i], names(branch1_archs4tf_TFs))][[1]]
+  
+# Without a
+  p1[[i]] <- gene.plotting.function(genelist = genelist, print.list = F, size = 1, text.size = 8, cols = mets.cols, sce = sce.branch1.aged.young.FULL, NA.0.correction = F, top.margin = 2, y.2.decimals = F,y.NO.decimals = F, title = branch1.name.vec.reordered[i], title.size = 8, x.axis = F)
+
+  # Without axes
+  #p1[[i]] <- p1[[i]] + theme(axis.text.x   = element_blank())
+  
+  # With axes
+  p1[[i]] <- p1[[i]] + theme(axis.text.x   = element_text(size = 2))
+}
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+text.size <- 8
+
+  # Without axes
+#pdf(file = paste(dir1, 'branch1_TF_group1_grid', '.pdf', sep = "") ,width = 7, height = 2.5)
+pdf(file = paste(dir1, 'branch1_TF_group1_grid_AXES', '.pdf', sep = "") ,width = 7, height = 2.5)
+
+#do.call(grid.arrange, p1, nrow = 1)
+grid.arrange(grobs = p1[1:length(p1)], nrow = 3, ncol = 10)
+
+dev.off()
+```
+### Fig S6 (Fig S5 now)  -- dimensions -- organized by group -- group2
+```{r}
+p <- heatmap(interct.df.branch1 )
+
+branch1.name.vec.reordered <- branch1.name.vec[rev(p$colInd)]
+p1 <- list()
+
+group <- branch1.name.vec.reordered[28:45]
+
+for (i in 1:length(group))
+#for (i in 1:length(branch1.name.vec.reordered))
+{
+  genelist <- branch1_archs4tf_TFs[grep(group[i], names(branch1_archs4tf_TFs))][[1]]
+  
+
+  p1[[i]] <- gene.plotting.function(genelist = genelist, print.list = F, size = 1, text.size = 8, cols = mets.cols, sce = sce.branch1.aged.young.FULL, NA.0.correction = F, top.margin = 2, y.2.decimals = F,y.NO.decimals = F, title = group[i], title.size = 8)
+  
+  p1[[i]] <- p1[[i]] + theme(axis.text.x   = element_blank())
+}
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+text.size <- 8
+
+pdf(file = paste(dir1, 'branch1_TF_group2_grid', '.pdf', sep = "") ,width = 7, height = 2)
+
+grid.arrange(grobs = p1[1:length(group)], nrow = 2, ncol = 10)
+
+dev.off()
+```
+
+### Fig S6 (Fig S5 now)  -- dimensions -- organized by group -- group3
+```{r}
+p <- heatmap(interct.df.branch1 )
+
+branch1.name.vec.reordered <- branch1.name.vec[rev(p$colInd)]
+p1 <- list()
+
+group <- branch1.name.vec.reordered[c(grep("SOX5",branch1.name.vec.reordered ) : grep("PP2R3",branch1.name.vec.reordered ))]
+
+for (i in 1:length(group))
+#for (i in 1:length(branch1.name.vec.reordered))
+{
+  genelist <- branch1_archs4tf_TFs[grep(group[i], names(branch1_archs4tf_TFs))][[1]]
+  
+
+  p1[[i]] <- gene.plotting.function(genelist = genelist, print.list = F, size = 1, text.size = 8, cols = mets.cols, sce = sce.branch1.aged.young.FULL, NA.0.correction = F, top.margin = 2, y.2.decimals = F,y.NO.decimals = F, title = group[i], title.size = 8)
+  
+  p1[[i]] <- p1[[i]] + theme(axis.text.x   = element_blank())
+}
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+text.size <- 8
+
+pdf(file = paste(dir1, 'branch1_TF_group3_grid', '.pdf', sep = "") ,width = 7, height = 2)
+
+#do.call(grid.arrange, p1, nrow = 1)
+grid.arrange(grobs = p1[1:length(group)], nrow = 2, ncol = 10)
+
+dev.off()
+```
+### Fig S6  (Fig S5 now) -- dimensions -- organized by group -- group4
+```{r}
+p <- heatmap(interct.df.branch1 )
+
+branch1.name.vec.reordered <- branch1.name.vec[rev(p$colInd)]
+p1 <- list()
+
+group <- branch1.name.vec.reordered[c(grep("MYOD1",branch1.name.vec.reordered ) : grep("MITF",branch1.name.vec.reordered ))]
+
+for (i in 1:length(group))
+#for (i in 1:length(branch1.name.vec.reordered))
+{
+  genelist <- branch1_archs4tf_TFs[grep(group[i], names(branch1_archs4tf_TFs))][[1]]
+  
+
+  p1[[i]] <- gene.plotting.function(genelist = genelist, print.list = F, size = 1, text.size = 8, cols = mets.cols, sce = sce.branch1.aged.young.FULL, NA.0.correction = F, top.margin = 2, y.2.decimals = F,y.NO.decimals = F, title = group[i], title.size = 8)
+  
+  p1[[i]] <- p1[[i]] + theme(axis.text.x   = element_blank())
+}
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+text.size <- 8
+
+pdf(file = paste(dir1, 'branch1_TF_group4_grid', '.pdf', sep = "") ,width = 7, height = 3)
+
+#do.call(grid.arrange, p1, nrow = 1)
+grid.arrange(grobs = p1[1:length(group)], nrow = 3, ncol = 10)
+
+dev.off()
+```
+
+### Fig S8 (Fig S6 now) 
+```{r}
+p <- heatmap(interct.df.branch2 )
+
+branch2.name.vec.reordered <- branch2.name.vec[rev(p$colInd)]
+p1 <- list()
+
+
+#for (i in 1:10)
+for (i in 1:length(branch2.name.vec.reordered))
+{
+  genelist <- branch2_archs4tf_TFs[grep(branch2.name.vec.reordered[i], names(branch2_archs4tf_TFs))][[1]]
+  
+  p1[[i]] <- gene.plotting.function(genelist = genelist, print.list = F, size = 1, text.size = 8, cols = mets.cols, sce = sce.branch2.sub1.aged.young, NA.0.correction = F, top.margin = 2, y.2.decimals = F, title = branch2.name.vec.reordered[i])
+}
+#p1
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+text.size <- 8
+
+pdf(file = paste(dir1, 'branch2_TF_100_grid', '.pdf', sep = "") ,width = 9, height = 11)
+
+do.call(grid.arrange, p1)
+dev.off()
+```
+
+### Fig S8 (Fig S6 now) -- dimensions -- organized by group -- branch2 GROUP1
+```{r}
+p <- heatmap(interct.df.branch2 )
+
+branch2.name.vec.reordered <- branch2.name.vec[rev(p$colInd)]
+p1 <- list()
+
+group <- branch2.name.vec.reordered[c(grep("MYOD1",branch2.name.vec.reordered ) : grep("ZBTB47",branch2.name.vec.reordered ))]
+
+for (i in 1:length(group))
+#for (i in 1:length(branch1.name.vec.reordered))
+{
+  genelist <- branch2_archs4tf_TFs[grep(group[i], names(branch2_archs4tf_TFs))][[1]]
+  
+
+  p1[[i]] <- gene.plotting.function(genelist = genelist, print.list = F, size = 1, text.size = 8, cols = mets.cols, sce = sce.branch2.sub1.aged.young, NA.0.correction = F, top.margin = 2, y.2.decimals = F,y.NO.decimals = F, title = group[i], title.size = 8)
+  
+  p1[[i]] <- p1[[i]] + theme(axis.text.x   = element_blank())
+}
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+text.size <- 8
+
+pdf(file = paste(dir1, 'branch2_TF_group1_grid', '.pdf', sep = "") ,width = 7.5, height = 3.3)
+
+#do.call(grid.arrange, p1, nrow = 1)
+grid.arrange(grobs = p1[1:length(group)], nrow = 4, ncol = 10)
+
+dev.off()
+```
+
+### Fig S8 -- dimensions -- organized by group -- branch2 GROUP2
+```{r}
+p <- heatmap(interct.df.branch2 )
+
+branch2.name.vec.reordered <- branch2.name.vec[rev(p$colInd)]
+p1 <- list()
+
+group <- branch2.name.vec.reordered[c(grep("ZMAT3",branch2.name.vec.reordered ) : grep("ZBTB44",branch2.name.vec.reordered ))]
+
+for (i in 1:length(group))
+#for (i in 1:length(branch1.name.vec.reordered))
+{
+  genelist <- branch2_archs4tf_TFs[grep(group[i], names(branch2_archs4tf_TFs))][[1]]
+  
+
+  p1[[i]] <- gene.plotting.function(genelist = genelist, print.list = F, size = 1, text.size = 8, cols = mets.cols, sce = sce.branch2.sub1.aged.young, NA.0.correction = F, top.margin = 2, y.2.decimals = F,y.NO.decimals = F, title = group[i], title.size = 8)
+  
+  p1[[i]] <- p1[[i]] + theme(axis.text.x   = element_blank())
+}
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+text.size <- 8
+
+pdf(file = paste(dir1, 'branch2_TF_group2_grid', '.pdf', sep = "") ,width = 7.5, height = 6)
+
+#do.call(grid.arrange, p1, nrow = 1)
+grid.arrange(grobs = p1[1:length(group)], nrow = 7, ncol = 10)
+
+dev.off()
+```
+### GO analysis on branch1 heatmap sub-clusters
+
+##### upper right quarant
+```{r}
+p <- heatmap(interct.df.branch1 )
+
+branch1.name.vec.reordered <- branch1.name.vec[rev(p$colInd)]
+
+ind1 <- which(branch1.name.vec.reordered == 'TWIST1')
+ind2 <- which(branch1.name.vec.reordered == 'MEOX2')
+heatmap.cluster <- branch1.name.vec.reordered[c(ind1:ind2)]
+
+heatmap.cluster.genes <- list()
+for (i in 1:length(heatmap.cluster))
+{
+  tmp.genelist <- branch1_archs4tf_TFs[grep(heatmap.cluster[i], names(branch1_archs4tf_TFs))][[1]]
+  heatmap.cluster.genes[[i]] <-  tmp.genelist
+  }
+
+full.cluster.genelist <- unique(unlist(as.vector(heatmap.cluster.genes)))
+
+write.genelist.fun(gene.list = full.cluster.genelist, filename = '~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch1_heatmap_upper_quadrant_genes.txt', paste = 0)
+```
+
+##### bottom left quarant
+```{r}
+p <- heatmap(interct.df.branch1 )
+
+branch1.name.vec.reordered <- branch1.name.vec[rev(p$colInd)]
+
+ind1 <- which(branch1.name.vec.reordered == 'MITF')
+ind2 <- which(branch1.name.vec.reordered == 'LBX1')
+heatmap.cluster <- branch1.name.vec.reordered[c(ind1:ind2)]
+
+heatmap.cluster.genes <- list()
+for (i in 1:length(heatmap.cluster))
+{
+  tmp.genelist <- branch1_archs4tf_TFs[grep(heatmap.cluster[i], names(branch1_archs4tf_TFs))][[1]]
+  heatmap.cluster.genes[[i]] <-  tmp.genelist
+  }
+
+full.cluster.genelist <- unique(unlist(as.vector(heatmap.cluster.genes)))
+
+write.genelist.fun(gene.list = full.cluster.genelist, filename = '~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch1_heatmap_bottom_left_genes.txt', paste = 0)
+```
+
+
+
+##### mid right quarant
+```{r}
+p <- heatmap(interct.df.branch1 )
+
+branch1.name.vec.reordered <- branch1.name.vec[rev(p$colInd)]
+
+ind1 <- which(branch1.name.vec.reordered == 'MACF1')
+ind2 <- which(branch1.name.vec.reordered == 'HP1BP3')
+heatmap.cluster <- branch1.name.vec.reordered[c(ind1:ind2)]
+
+heatmap.cluster.genes <- list()
+for (i in 1:length(heatmap.cluster))
+{
+  tmp.genelist <- branch1_archs4tf_TFs[grep(heatmap.cluster[i], names(branch1_archs4tf_TFs))][[1]]
+  heatmap.cluster.genes[[i]] <-  tmp.genelist
+  }
+
+full.cluster.genelist <- unique(unlist(as.vector(heatmap.cluster.genes)))
+
+write.genelist.fun(gene.list = full.cluster.genelist, filename = '~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch1_heatmap_mid_right_genes.txt', paste = 0)
+```
+
+### GO analysis on branch2 heatmap sub-clusters
+
+##### upper right quarant
+```{r}
+p <- heatmap(interct.df.branch2 )
+
+branch2.name.vec.reordered <- branch2.name.vec[rev(p$colInd)]
+
+ind1 <- which(branch2.name.vec.reordered == 'MYOD1')
+ind2 <- which(branch2.name.vec.reordered == 'ZBTB47')
+heatmap.cluster <- branch2.name.vec.reordered[c(ind1:ind2)]
+
+heatmap.cluster.genes <- list()
+for (i in 1:length(heatmap.cluster))
+{
+  tmp.genelist <- branch2_archs4tf_TFs[grep(heatmap.cluster[i], names(branch2_archs4tf_TFs))][[1]]
+  heatmap.cluster.genes[[i]] <-  tmp.genelist
+  }
+
+full.cluster.genelist.branch2.main.clust <- unique(unlist(as.vector(heatmap.cluster.genes)))
+
+write.genelist.fun(gene.list = full.cluster.genelist.branch2.main.clust, filename = '~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch2_heatmap_upper_quadrant_genes.txt', paste = 0)
+```
+
+##### branch2_rest quarant
+```{r}
+p <- heatmap(interct.df.branch2 )
+
+branch2.name.vec.reordered <- branch2.name.vec[rev(p$colInd)]
+
+ind1 <- which(branch2.name.vec.reordered == 'ZMAT3')
+ind2 <- which(branch2.name.vec.reordered == 'ZBTB44')
+heatmap.cluster <- branch2.name.vec.reordered[c(ind1:ind2)]
+
+heatmap.cluster.genes <- list()
+for (i in 1:length(heatmap.cluster))
+{
+  tmp.genelist <- branch2_archs4tf_TFs[grep(heatmap.cluster[i], names(branch2_archs4tf_TFs))][[1]]
+  heatmap.cluster.genes[[i]] <-  tmp.genelist
+  }
+
+full.cluster.genelist <- unique(unlist(as.vector(heatmap.cluster.genes)))
+full.cluster.genelist.branch2.NOT.in.main.cluster <- unique(unlist(as.vector(heatmap.cluster.genes)))
+
+write.genelist.fun(gene.list = full.cluster.genelist, filename = '~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch2_heatmap_REST_genes.txt', paste = 0)
+```
+
+##### unique genes only
+```{r}
+### rest
+p <- heatmap(interct.df.branch2 )
+
+branch2.name.vec.reordered <- branch2.name.vec[rev(p$colInd)]
+
+ind1 <- which(branch2.name.vec.reordered == 'ZMAT3')
+ind2 <- which(branch2.name.vec.reordered == 'ZBTB44')
+heatmap.cluster <- branch2.name.vec.reordered[c(ind1:ind2)]
+
+heatmap.cluster.genes <- list()
+for (i in 1:length(heatmap.cluster))
+{
+  tmp.genelist <- branch2_archs4tf_TFs[grep(heatmap.cluster[i], names(branch2_archs4tf_TFs))][[1]]
+  heatmap.cluster.genes[[i]] <-  tmp.genelist
+  }
+
+full.cluster.genelist.not.unique <- unique(unlist(as.vector(heatmap.cluster.genes)))
+full.cluster.genelist.branch2.NOT.in.main.cluster.unique <- full.cluster.genelist[which(full.cluster.genelist %nin% full.cluster.genelist.branch2.main.clust)]
+
+write.genelist.fun(gene.list = full.cluster.genelist.not.unique, filename = '~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch2_heatmap_REST_ONLY_UNIQUE_genes.txt', paste = 0)
+
+
+### upper right
+ind1 <- which(branch2.name.vec.reordered == 'MYOD1')
+ind2 <- which(branch2.name.vec.reordered == 'ZBTB47')
+heatmap.cluster <- branch2.name.vec.reordered[c(ind1:ind2)]
+
+heatmap.cluster.genes <- list()
+for (i in 1:length(heatmap.cluster))
+{
+  tmp.genelist <- branch2_archs4tf_TFs[grep(heatmap.cluster[i], names(branch2_archs4tf_TFs))][[1]]
+  heatmap.cluster.genes[[i]] <-  tmp.genelist
+  }
+
+full.cluster.genelist.branch2.main.clust <- unique(unlist(as.vector(heatmap.cluster.genes)))
+full.cluster.genelist.branch2.main.clust.unique <- full.cluster.genelist.branch2.main.clust[which(full.cluster.genelist.branch2.main.clust %nin% full.cluster.genelist.not.unique)]
+
+
+write.genelist.fun(gene.list = full.cluster.genelist.branch2.main.clust.unique, filename = '~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch2_heatmap_upper_quadrant_UNIQUE_genes.txt', paste = 0)
+```
+
+
+
+### BRANCH1 upper right heatmap cluster -- trajectory plots from panther
+```{r}
+
+```
+
+
+
+# Fig5 - average expression
+```{r}
+updated.seurat.tmp <- SetIdent(updated.seurat, value = 'condition.id')
+df1 <- data.frame(AverageExpression(updated.seurat.tmp)$RNA)
+ggplot(df1, aes(x = Young, y = Aged, 2)) + geom_point() + theme_classic()
+summary(lm(df1$Young ~ df1$Aged))$r.squared
+
+df.log <- data.frame(young.log = -log(df1$Young, 10), aged.log = -log(df1$Aged, 10))
+df2 <- df.log
+#df2$young.log[which(df2$young.log == '-Inf')] <- 0
+#df2$aged.log[which(df2$aged.log == '-Inf')] <- 0
+df2 <- df2[-which(df2$aged.log == 'Inf') ,]
+df2 <- df2[-which(df2$young.log == 'Inf') ,]
+
+
+ggplot(df2, aes(x = young.log, y = aged.log, 2)) + geom_point() + theme_classic()
+
+summary(lm(df2$young.log ~ df2$aged.log))$r.squared
+```
+```{r}
+ggplot(df2, aes(x = young.log, y = aged.log)) + 
+  geom_point(size = 0.2) + 
+  geom_abline(slope = as.vector(coef(lm(df2$aged.log ~ df2$young.log))[2])) +
+  theme_classic() +
+  theme(legend.position='none') +   
+  theme(axis.title.x = element_blank()) +
+  theme(axis.title.y = element_blank()) + 
+  theme(plot.margin = margin(t = 3, r = 9, b = 0, l = 0)) +
+      theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_blank()) + 
+    theme(plot.margin = margin(t = 3, r = 9, b = 0, l = 0)) +
+    theme(axis.line = element_blank(),
+        panel.border = element_rect(colour = "black", fill=NA, size=1)) +
+  theme(plot.title=element_blank())
+
+
+df3 <- data.frame(log.aged = df2$aged.log.adj,
+                  log.young = df2$young.log.adj,
+                  std = runif(length(df2$young),0,1))
+
+
+ggplot(df3, aes(x = log.young, y = log.aged)) + 
+  geom_point(size = 0.2) + 
+  geom_abline(slope = as.vector(coef(lm(df2$aged.log ~ df2$young.log))[2])) +
+  theme_classic() +
+  theme(legend.position='none') +   
+  theme(axis.title.x = element_blank()) +
+  theme(axis.title.y = element_blank()) + 
+  theme(plot.margin = margin(t = 3, r = 9, b = 0, l = 0)) +
+      theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_blank()) + 
+    theme(plot.margin = margin(t = 3, r = 9, b = 0, l = 0)) +
+    theme(axis.line = element_blank(),
+        panel.border = element_rect(colour = "black", fill=NA, size=1)) +
+  theme(plot.title=element_blank())+
+    geom_ribbon(aes(ymin = mean(log.young) - std,
+                  ymax = log.young + std),    # shadowing cnf intervals
+              fill = "steelblue2")
+```
+
+#### good dimensions
+```{r}
+  dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+pdf(file = paste(dir1, 'log10_avg_expression_plot.pdf', sep = "") ,width = 2.2, height = 1.5)
+text.size = 6
+
+ggplot(df2, aes(x = young.log, y = aged.log)) + 
+  geom_point(size = 0.2) + 
+  geom_abline(slope = as.vector(coef(lm(df2$aged.log ~ df2$young.log))[2])) +
+  theme_classic() +
+  theme(legend.position='none') +   
+  theme(axis.title.x = element_blank()) +
+  theme(axis.title.y = element_blank()) + 
+  theme(plot.margin = margin(t = 3, r = 9, b = 0, l = 0)) +
+      theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_blank()) + 
+    theme(plot.margin = margin(t = 3, r = 9, b = 0, l = 0)) +
+    theme(axis.line = element_blank(),
+        panel.border = element_rect(colour = "black", fill=NA, size=1)) +
+  theme(plot.title=element_blank())
+
+dev.off()
+
+```
+
+#### log10(variance) good dimensions
+```{r}
+df2 <- cbind(df, 
+             log.young = log10(df$young),
+             log.aged = log10(df$aged))
+
+vec1 <- df2$log.aged
+vec1[which(vec1 == '-Inf')] <- 0
+
+vec2 <- df2$log.young
+vec2[which(vec2 == '-Inf')] <- 0
+
+
+df2 <- cbind(df2, aged.log.adj = vec1, 
+                  young.log.adj = vec2)
+
+summary(lm(df2$aged.log.adj ~ df2$young.log.adj))$r.squared
+
+```
+
+```{r}
+ggplot(df2, aes(x = young.log.adj, y = aged.log.adj)) + 
+  geom_point(size = 0.2) + 
+  geom_abline(slope = as.vector(coef(lm(df2$aged.log.adj ~ df2$young.log.adj))[2])) +
+  theme_classic() +
+  theme(legend.position='none') +   
+  theme(axis.title.x = element_blank()) +
+  theme(axis.title.y = element_blank()) + 
+  theme(plot.margin = margin(t = 3, r = 9, b = 0, l = 0)) +
+      theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_blank()) + 
+    theme(plot.margin = margin(t = 3, r = 9, b = 0, l = 0)) +
+    theme(axis.line = element_blank(),
+        panel.border = element_rect(colour = "black", fill=NA, size=1)) +
+  theme(plot.title=element_blank())
+```
+
+### Good dimensions
+```{r}
+  dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+pdf(file = paste(dir1, 'log10_variance_plot.pdf', sep = "") ,width = 2.2, height = 1.5)
+text.size = 6
+
+ggplot(df2, aes(x = young.log.adj, y = aged.log.adj)) + 
+  geom_point(size = 0.2) + 
+  geom_abline(slope = as.vector(coef(lm(df2$aged.log.adj ~ df2$young.log.adj))[2])) +
+  theme_classic() +
+  theme(legend.position='none') +   
+  theme(axis.title.x = element_blank()) +
+  theme(axis.title.y = element_blank()) + 
+  theme(plot.margin = margin(t = 3, r = 9, b = 0, l = 0)) +
+      theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_blank()) + 
+    theme(plot.margin = margin(t = 3, r = 9, b = 0, l = 0)) +
+    theme(axis.line = element_blank(),
+        panel.border = element_rect(colour = "black", fill=NA, size=1)) +
+  theme(plot.title=element_blank())
+
+dev.off()
+
+```

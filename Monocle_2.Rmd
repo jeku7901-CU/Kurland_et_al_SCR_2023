@@ -1,0 +1,873 @@
+# 4/1/22
+### Packages
+```{r include=FALSE}
+library(Seurat)
+library(SoupX)
+library(monocle)
+library(cowplot)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(gplots)
+library(limma)
+library(gridExtra)
+library(DoubletFinder)
+library(enrichR)
+library(monocle3)
+library(SeuratWrappers)
+library(scales)
+library(magrittr)
+library(tradeSeq)
+library(clusterExperiment)
+library(RColorBrewer)
+library(rjson)
+library(gridExtra)
+library(grid)
+library(lattice)
+```
+
+# Functions
+
+#not in
+```{r}
+`%nin%` = Negate(`%in%`)
+
+mets.cols <- c( '#FF5910', '#002D72')
+```
+
+### write.table
+```{r}
+
+write.genelist.fun <- function(gene.list, filename, paste = 1)
+{
+  if (paste == 1) {filename = paste("~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/", filename, sep = "")}
+  if (paste == 2) {filename = paste("~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/", filename, sep = "")}
+write.table(gene.list,
+            file = filename,
+            col.names = F,
+                              row.names = F,
+                              quote = F,
+                              sep = "\n")
+}
+```
+
+### convert uppercase genenames to lowercase
+```{r}
+gene.uppercase.to.lowercase.fun <- function(string)
+{
+  lower.case.name.half.tmp <- tolower(substring(string, 2))
+  full.format.name <- paste(substring(string, first = 1, last = 1), lower.case.name.half.tmp, sep = "")
+  return(full.format.name)
+}
+
+```
+
+### upstream.tf.plotting.fun
+```{r}
+# branch2_Trust_TFs <- upstream.tf.plotting.fun(enrich.df.filepath =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch2_Trust_TFs.csv", 
+#                          sce = sce.branch2.aged.young.FULL,
+#                          print.list = F)
+
+upstream.tf.plotting.fun <- function(enrich.df.filepath, 
+                                     sce, 
+                                     normalize = 1, 
+                                     print.genelist.for = NULL, 
+                                     print.list = T, 
+                                     cols = mets.cols)
+{
+  enrich.df <- read.csv(file = enrich.df.filepath) 
+
+
+  enrich.df <- enrich.df[order(enrich.df$Combined.Score, decreasing = T),]
+  enrich.df <- enrich.df[which(enrich.df$Adjusted.P.value < 0.05),]
+  
+  if (nrow(enrich.df) > 50){enrich.df <- enrich.df[1:50, ]}
+
+  
+  ### To turn the enrichr protein names to genes
+  list1 <- list()
+  for (i in 1:nrow(enrich.df))
+    {
+      uppercase.genes <- strsplit(enrich.df$Genes[i], split = ";")
+      
+      for (j in 1:length(uppercase.genes[[1]]))
+      {
+        lower.case.name.half.tmp <- tolower(substring(uppercase.genes[[1]][j], 2))
+        full.format.name <- paste(substring(uppercase.genes[[1]][j], first = 1, last = 1), lower.case.name.half.tmp, sep = "")
+        list1[[paste(enrich.df$Term[i])]][j] <- full.format.name
+      }
+    }
+
+     #if (print.list == T) {print(list1)}
+  if (print.list == T) {return(list1)}
+  
+##plotting loop
+for (plot.num in 1:length(list1))
+
+  {
+    genelist <- list1[[plot.num]]
+
+    #genelist <- c(gene.uppercase.to.lowercase.fun
+    
+    # remove genes that are not in the sce
+    if (any(list1[[plot.num]] %in% rownames(sce) == FALSE) == TRUE)
+      {
+      genelist <- genelist[-which(list1[[plot.num]] %nin% rownames(sce))]
+      }
+      
+    tf.name <- gene.uppercase.to.lowercase.fun( strsplit(names(list1)[plot.num], split = " ")[[1]][1])
+
+    if (tf.name %in% genelist == T) {genelist <- genelist[-which(tf.name %in% genelist)]}
+    
+    #if (print.genelist.for == tf.name) {print(paste(tf.name, "::", genelist, sep = ""))}
+ 
+      
+      ysmooth <- predictSmooth(models = sce, gene = genelist, nPoints = 20)
+     
+    ymooth.spread <- spread(ysmooth, key = gene, value = yhat)
+    
+    ymooth.spread.l1.time <- ymooth.spread[1:20, 3:ncol(ymooth.spread)]
+    ymooth.spread.l2.time <- ymooth.spread[21:40, 3:ncol(ymooth.spread)]
+        
+    sderr.l1 <- rowSds(as.matrix(ymooth.spread.l1.time)) / sqrt(ncol(as.matrix(ymooth.spread.l1.time)))
+        
+    ymooth.spread.l1.mean <- data.frame(time = seq(1:20),
+                                        lineage = rep("Aged", 20), 
+                                        line.mean = rowMeans(ymooth.spread.l1.time),
+                                        
+                                        sderr = sderr.l1,
+                                        sd.high = rowMeans(ymooth.spread.l1.time) + sderr.l1,
+                                        sd.low = rowMeans(ymooth.spread.l1.time) - sderr.l1,
+                                        row.names = NULL)
+                            
+    
+    sderr.l2 <- rowSds(as.matrix(ymooth.spread.l2.time)) / sqrt(ncol(as.matrix(ymooth.spread.l2.time)))
+
+    ymooth.spread.l2.mean <- data.frame(time = seq(1:20),
+                                        lineage = rep("Young", 20), 
+                                        line.mean = rowMeans(ymooth.spread.l2.time),
+                                        
+                                        sderr = rowSds(as.matrix(ymooth.spread.l2.time)) / sderr.l2,
+                                        sd.high = rowMeans(ymooth.spread.l2.time) + sderr.l2,
+                                        sd.low = rowMeans(ymooth.spread.l2.time) - sderr.l2,
+                                        row.names = NULL)
+      
+    genes.l1.l2.means <-rbind(ymooth.spread.l1.mean, ymooth.spread.l2.mean)
+    
+    ### ACTUAL TF GENE
+    if (tf.name %nin% rownames(sce)) {next}
+    
+        ysmooth <- predictSmooth(models = sce, gene = tf.name, nPoints = 20)
+     
+    ymooth.spread <- spread(ysmooth, key = gene, value = yhat)
+    
+    
+        ymooth.spread.l1.time.tf <- ymooth.spread[1:20, 3:ncol(ymooth.spread)]
+    ymooth.spread.l2.time.tf <- ymooth.spread[21:40, 3:ncol(ymooth.spread)]
+    
+        sderr.l1 <- sd(as.matrix(ymooth.spread.l1.time.tf)) / sqrt(ncol(as.matrix(ymooth.spread.l1.time.tf)))
+
+    
+        ymooth.spread.l1.mean.tf <- data.frame(time = seq(1:20),
+                                        lineage = rep(paste(tf.name, "_", "Aged", sep = ""), 20), 
+                                        #line.mean = mean(ymooth.spread.l1.time.tf),
+                                        line.mean = ymooth.spread.l1.time.tf,
+                                        
+                                        sderr = sderr.l1,
+                                        sd.high = ymooth.spread.l1.time.tf + sderr.l1,
+                                        sd.low = ymooth.spread.l1.time.tf - sderr.l1,
+                                        row.names = NULL)
+                            
+    
+    sderr.l2 <- sd(as.matrix(ymooth.spread.l2.time.tf)) / sqrt(ncol(as.matrix(ymooth.spread.l2.time.tf)))
+
+    ymooth.spread.l2.mean.tf <- data.frame(time = seq(1:20),
+                                        lineage = rep(paste(tf.name, "_", "Young", sep = ""), 20), 
+                                        line.mean = ymooth.spread.l2.time.tf,
+                                        
+                                        sderr =  sderr.l2,
+                                        sd.high = ymooth.spread.l2.time.tf + sderr.l2,
+                                        sd.low = ymooth.spread.l2.time.tf - sderr.l2,
+                                        row.names = NULL)
+    TF.l1.l2.means <-rbind(ymooth.spread.l1.mean.tf, ymooth.spread.l2.mean.tf)
+    
+    
+    # plot with TF expression normalized with target gene expression
+    if (normalize == 1)
+      {
+              print(   
+         ggplot(genes.l1.l2.means, aes(x = time, y = line.mean / max(line.mean), color = lineage)) + 
+         geom_line(size = 2) + 
+         ggtitle(paste(names(list1[plot.num]), sep = "")) +
+         geom_ribbon( aes(x = time, ymin = sd.low, ymax = sd.high, fill=lineage,), color = 'black',outline.type = "both", size = 0.1, alpha=0.5) + 
+           theme_classic() + 
+
+                    geom_line(data = TF.l1.l2.means, aes(x = time, y = line.mean / max(genes.l1.l2.means$line.mean), color = lineage), size = 2, linetype = 'dashed')  + 
+         ggtitle(paste(names(list1[plot.num]), sep = "")) +
+         geom_ribbon(data = TF.l1.l2.means, aes(x = time, ymin = sd.low, ymax = sd.high, fill=lineage,), color = 'black',outline.type = "both", size = 0.1, alpha=0.2) + 
+
+                    scale_fill_manual(values = c(cols, cols), 
+                                      breaks = c("Aged", "Young", paste(tf.name, "_", "Aged", sep = ""), paste(tf.name, "_", "Young", sep = "")))+
+                    scale_color_manual(values = c(cols, cols),
+                                      breaks = c("Aged", "Young", paste(tf.name, "_", "Aged", sep = ""), paste(tf.name, "_", "Young", sep = "")))+
+           theme_classic()
+         )
+    }
+      
+    
+      # Togerhter plot
+        print(   
+         ggplot(genes.l1.l2.means, aes(x = time, y = line.mean, color = lineage)) + 
+         geom_line(size = 2) + 
+         ggtitle(paste(names(list1[plot.num]), sep = "")) +
+         geom_ribbon( aes(x = time, ymin = sd.low, ymax = sd.high, fill=lineage,), color = 'black',outline.type = "both", size = 0.1, alpha=0.5) + 
+           theme_classic() + 
+
+                    geom_line(data = TF.l1.l2.means, aes(x = time, y = line.mean, color = lineage), size = 2, linetype = 'dashed')  + 
+         ggtitle(paste(names(list1[plot.num]), sep = "")) +
+         geom_ribbon(data = TF.l1.l2.means, aes(x = time, ymin = sd.low, ymax = sd.high, fill=lineage,), color = 'black',outline.type = "both", size = 0.1, alpha=0.2) + 
+
+                    scale_fill_manual(values = c(cols, cols), 
+                                      breaks = c("Aged", "Young", paste(tf.name, "_", "Aged", sep = ""), paste(tf.name, "_", "Young", sep = "")))+
+                    scale_color_manual(values = c(cols, cols),
+                                      breaks = c("Aged", "Young", paste(tf.name, "_", "Aged", sep = ""), paste(tf.name, "_", "Young", sep = "")))+
+           theme_classic()
+         )
+        
+        # TF-alone plot
+               print(   
+         ggplot() + 
+
+  
+
+                    geom_line(data = TF.l1.l2.means, aes(x = time, y = line.mean, color = lineage), size = 2, linetype = 'dashed')  + 
+         ggtitle(paste(names(list1[plot.num]), sep = "")) +
+         geom_ribbon(data = TF.l1.l2.means, aes(x = time, ymin = sd.low, ymax = sd.high, fill=lineage,), color = 'black',outline.type = "both", size = 0.1, alpha=0.2) + 
+
+                    scale_fill_manual(values = c(cols,cols), 
+                                      breaks = c("Aged", "Young", paste(tf.name, "_", "Aged", sep = ""), paste(tf.name, "_", "Young", sep = "")))+
+                    scale_color_manual(values = c(cols, cols),
+                                      breaks = c("Aged", "Young", paste(tf.name, "_", "Aged", sep = ""), paste(tf.name, "_", "Young", sep = "")))+
+           theme_classic()
+         )
+  }
+}
+```
+
+### gene.plotting.from.enrichr.function
+```{r}
+ function(enrich.df.filepath, 
+                                     sce, 
+                                     normalize = 1, 
+                                     print.genelist.for = NULL, 
+                                     print.list = T, 
+                                     cols = mets.cols)
+{
+  enrich.df <- read.csv(file = enrich.df.filepath) 
+
+
+  enrich.df <- enrich.df[order(enrich.df$Combined.Score, decreasing = T),]
+  enrich.df <- enrich.df[which(enrich.df$Adjusted.P.value < 0.05),]
+  
+  if (nrow(enrich.df) > 50){enrich.df <- enrich.df[1:50, ]}
+
+  
+  ### To turn the enrichr protein names to genes
+  list1 <- list()
+  for (i in 1:nrow(enrich.df))
+    {
+      uppercase.genes <- strsplit(enrich.df$Genes[i], split = ";")
+      
+      for (j in 1:length(uppercase.genes[[1]]))
+      {
+        lower.case.name.half.tmp <- tolower(substring(uppercase.genes[[1]][j], 2))
+        full.format.name <- paste(substring(uppercase.genes[[1]][j], first = 1, last = 1), lower.case.name.half.tmp, sep = "")
+        list1[[paste(enrich.df$Term[i])]][j] <- full.format.name
+      }
+    }
+
+     #if (print.list == T) {print(list1)}
+  if (print.list == T) {return(list1)}
+  
+##plotting loop
+for (plot.num in 1:length(list1))
+
+  {
+    genelist <- list1[[plot.num]]
+       # remove genes that are not in the sce
+    if (any(genelist[[plot.num]] %in% rownames(sce) == FALSE) == TRUE)
+      {
+      genelist <- genelist[-which(genelist[[plot.num]] %nin% rownames(sce))]
+      }
+      
+      
+      ysmooth <- predictSmooth(models = sce, gene = genelist, nPoints = 20)
+     
+    ymooth.spread <- spread(ysmooth, key = gene, value = yhat)
+    
+    ymooth.spread.l1.time <- ymooth.spread[1:20, 3:ncol(ymooth.spread)]
+    ymooth.spread.l2.time <- ymooth.spread[21:40, 3:ncol(ymooth.spread)]
+        
+    sderr.l1 <- rowSds(as.matrix(ymooth.spread.l1.time)) / sqrt(ncol(as.matrix(ymooth.spread.l1.time)))
+        
+    ymooth.spread.l1.mean <- data.frame(time = seq(1:20),
+                                        lineage = rep("Aged", 20), 
+                                        line.mean = rowMeans(ymooth.spread.l1.time),
+                                        
+                                        sderr = sderr.l1,
+                                        sd.high = rowMeans(ymooth.spread.l1.time) + sderr.l1,
+                                        sd.low = rowMeans(ymooth.spread.l1.time) - sderr.l1,
+                                        row.names = NULL)
+                            
+    
+    sderr.l2 <- rowSds(as.matrix(ymooth.spread.l2.time)) / sqrt(ncol(as.matrix(ymooth.spread.l2.time)))
+
+    ymooth.spread.l2.mean <- data.frame(time = seq(1:20),
+                                        lineage = rep("Young", 20), 
+                                        line.mean = rowMeans(ymooth.spread.l2.time),
+                                        
+                                        sderr = rowSds(as.matrix(ymooth.spread.l2.time)) / sderr.l2,
+                                        sd.high = rowMeans(ymooth.spread.l2.time) + sderr.l2,
+                                        sd.low = rowMeans(ymooth.spread.l2.time) - sderr.l2,
+                                        row.names = NULL)
+      
+    genes.l1.l2.means <-rbind(ymooth.spread.l1.mean, ymooth.spread.l2.mean)
+        
+        # gene plot
+               print(   
+                 ggplot() + 
+                 geom_line(data = genes.l1.l2.means, aes(x = time, y = line.mean, color = lineage), size = 2, linetype = 'dashed')  + 
+                 geom_ribbon(data = genes.l1.l2.means, aes(x = time, ymin = sd.low, ymax = sd.high, fill=lineage,), color = 'black',outline.type = "both", size = 0.1, alpha=0.2) + 
+                 scale_fill_manual(values = c(cols), 
+                                      breaks = c("Aged", "Young", paste(tf.name, "_", "Aged", sep = ""), paste(tf.name, "_", "Young", sep = "")))+
+                 scale_color_manual(values = c(cols),
+                                      breaks = c("Aged", "Young", paste(tf.name, "_", "Aged", sep = ""), paste(tf.name, "_", "Young", sep = "")))+
+                theme_classic()
+         )
+  }
+}
+```
+
+
+
+### gene.plotting.function
+```{r}
+ # sce = sce.branch2.aged.young.FULL
+ # genelist = unique(glycolysis.not.diff)
+#genelist = unique(not.diff)
+#genelist <- unique(pathway.list$`electron transport chain`)
+#sce = sce.branch2.sub1.aged.young
+
+gene.plotting.function <- function(genelist, 
+                                     sce, 
+                                     normalize = 1, 
+                                     print.genelist.for = NULL, 
+                                     print.list = T, 
+                                     cols = mets.cols,
+                                     title = "",
+                                     NA.0.correction = T)
+{
+
+##plotting loop
+  
+    # remove genes that are not in the sce
+    if (any(genelist %in% rownames(sce) == FALSE) == TRUE)
+      {
+      genelist <- genelist[-which(genelist %nin% rownames(sce))]
+      }
+      
+      #if (grep('Bmp7', colnames(ymooth.spread.l1.time)) == 28) {genelist <- genelist[-28]}
+  
+      ysmooth <- predictSmooth(models = sce, gene = genelist, nPoints = 20)
+     
+    ymooth.spread <- spread(ysmooth, key = gene, value = yhat)
+    
+    ymooth.spread.l1.time <- ymooth.spread[1:20, 3:ncol(ymooth.spread)]
+    ymooth.spread.l2.time <- ymooth.spread[21:40, 3:ncol(ymooth.spread)]
+    
+    if (NA.0.correction == T){
+    ymooth.spread.l1.time <- ymooth.spread.l1.time[,-which(is.na(ymooth.spread.l1.time[5,]) | ymooth.spread.l1.time[5,] == 0  )]
+    ymooth.spread.l2.time <- ymooth.spread.l2.time[,-which(is.na(ymooth.spread.l2.time[5,]) | ymooth.spread.l2.time[5,] == 0  )]
+    }
+        
+    sderr.l1 <- rowSds(as.matrix(ymooth.spread.l1.time)) / sqrt(ncol(as.matrix(ymooth.spread.l1.time)))
+        
+    ymooth.spread.l1.mean <- data.frame(time = seq(1:20),
+                                        lineage = rep("Aged", 20), 
+                                        line.mean = rowMeans(ymooth.spread.l1.time),
+                                        
+                                        sderr = sderr.l1,
+                                        sd.high = rowMeans(ymooth.spread.l1.time) + sderr.l1,
+                                        sd.low = rowMeans(ymooth.spread.l1.time) - sderr.l1,
+                                        row.names = NULL)
+                            
+    
+    sderr.l2 <- rowSds(as.matrix(ymooth.spread.l2.time)) / sqrt(ncol(as.matrix(ymooth.spread.l2.time)))
+
+    ymooth.spread.l2.mean <- data.frame(time = seq(1:20),
+                                        lineage = rep("Young", 20), 
+                                        line.mean = rowMeans(ymooth.spread.l2.time),
+                                        
+                                        sderr = rowSds(as.matrix(ymooth.spread.l2.time)) / sderr.l2,
+                                        sd.high = rowMeans(ymooth.spread.l2.time) + sderr.l2,
+                                        sd.low = rowMeans(ymooth.spread.l2.time) - sderr.l2,
+                                        row.names = NULL)
+      
+    genes.l1.l2.means <-rbind(ymooth.spread.l1.mean, ymooth.spread.l2.mean)
+        
+        # gene plot
+               print(   
+                 ggplot() + 
+                 geom_line(data = genes.l1.l2.means, aes(x = time, y = line.mean, color = lineage), size = 2)  + 
+                 geom_ribbon(data = genes.l1.l2.means, aes(x = time, ymin = sd.low, ymax = sd.high, fill=lineage,), color = 'black',outline.type = "both", size = 0.1, alpha=0.2) + 
+                 scale_fill_manual(values = c(cols), 
+                                   breaks = c("Aged", "Young"))+
+                 scale_color_manual(values = c(cols),
+                                   breaks = c("Aged", "Young"))+
+                theme_classic() + ggtitle(title)
+         )
+
+}
+```
+
+
+
+#### Reading in seurat obj and converting to cds
+```{r}
+load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/final_myogenic_subset_seurat.RData")
+
+DimPlot(myogenic.subset.umap.final)
+updated.seurat <- myogenic.subset.umap.final
+rm(myogenic.subset.umap.final)
+
+### main cds
+# load(file = "/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/monocle3_obj_1.RData")
+
+### cds.master
+load(file = "/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/cds_master.RData") # this is equivalent to cds1_newpt, with the pseudotime starting from base
+
+
+
+## If wanting to start from fresh cds:
+#cds.protected <- as.cell_data_set(myogenic.subset.umap.final)
+
+### cds branch objects
+load(file = '~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/cds_branch_objs.RData')
+
+### sce branch1
+load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/sce_branch1_aged_young_FULL.RData")
+
+### sce branch2
+load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/sce_branch2_aged_young_FULL.RData")
+
+```
+
+### Plot cds.master --- this cds object has pseudotime apllied to it (make into one with original pseudotime direction)
+```{r}
+plot_cells(cds.master, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = T, label_cell_groups = T, color_cells_by = 'pseudotime')
+plot_cells(cds.master, label_groups_by_cluster=F, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_leaves = F, label_roots = F, color_cells_by = 'pseudotime')
+
+plot_cells(cds.master, label_groups_by_cluster=F, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_leaves = F, label_roots = F, color_cells_by = 'condition.id', alpha = 0.6) + scale_color_manual(values = c('red', 'black')) 
+
+plot_cells(cds.master, label_groups_by_cluster=F, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_leaves = F, label_roots = F, color_cells_by = 'injury.dpi')
+plot_cells(cds.master, label_groups_by_cluster=F, cell_size = 0.6, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_leaves = F, label_roots = F, genes = "Pax7", scale_to_range = T)
+plot_cells(cds.master, label_groups_by_cluster=F, cell_size = 0.6, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_leaves = F, label_roots = F, genes = "Runx1", scale_to_range = T)
+plot_cells(cds.master, label_groups_by_cluster=F, cell_size = 0.6, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_leaves = F, label_roots = F, genes = "Myh3", scale_to_range = T)
+plot_cells(cds.master, label_groups_by_cluster=F, cell_size = 0.6, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_leaves = F, label_roots = F, genes = "Myh8", scale_to_range = T)
+plot_cells(cds.master, label_groups_by_cluster=F, cell_size = 0.6, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_leaves = F, label_roots = F, genes = "Myh4", scale_to_range = T)
+plot_cells(cds.master, label_groups_by_cluster=F, cell_size = 0.6, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_leaves = F, label_roots = F, genes = "Ttn", scale_to_range = T)
+plot_cells(cds.master, label_groups_by_cluster=F, cell_size = 0.6, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_leaves = F, label_roots = F, genes = "Neb", scale_to_range = T)
+```
+
+#### Separating Branch1 and Branch2 and clustering each branch with aged and young-adult separately and then combined
+
+### cds.branch1 and cds.branch2
+```{r}
+cds.master$monocle.clusters.working <- cds.master@clusters@listData$UMAP$clusters
+
+branch1.clusters <- c("12", "15", "11", "7", '10', '3')
+cds.branch1 <- cds.master[, which(cds.master@clusters@listData$UMAP$clusters == branch1.clusters[1] | 
+                                         cds.master@clusters@listData$UMAP$clusters == branch1.clusters[2] | 
+                                         cds.master@clusters@listData$UMAP$clusters == branch1.clusters[3] |
+                                         cds.master@clusters@listData$UMAP$clusters == branch1.clusters[4] |
+                                         cds.master@clusters@listData$UMAP$clusters == branch1.clusters[5] |
+                                         cds.master@clusters@listData$UMAP$clusters == branch1.clusters[6])]
+plot_cells(cds.branch1, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, 
+           label_roots = F, label_leaves = F)
+
+
+branch2.clusters <- c(12, seq(1:15)[seq(1:15) %in% branch1.clusters == FALSE]) # everything not in branch1 (plus the elbow)
+cds.branch2 <- cds.master[, which(cds.master@clusters@listData$UMAP$clusters == branch2.clusters[1] | 
+                                         cds.master@clusters@listData$UMAP$clusters == branch2.clusters[2] | 
+                                         cds.master@clusters@listData$UMAP$clusters == branch2.clusters[3] |
+                                         cds.master@clusters@listData$UMAP$clusters == branch2.clusters[4] |
+                                         cds.master@clusters@listData$UMAP$clusters == branch2.clusters[5] |
+                                         cds.master@clusters@listData$UMAP$clusters == branch2.clusters[6] |
+                                         cds.master@clusters@listData$UMAP$clusters == branch2.clusters[7] |
+                                         cds.master@clusters@listData$UMAP$clusters == branch2.clusters[8] |
+                                         cds.master@clusters@listData$UMAP$clusters == branch2.clusters[9] |
+                                         cds.master@clusters@listData$UMAP$clusters == branch2.clusters[10])]
+
+plot_cells(cds.master, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+
+plot_cells(cds.branch2, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, 
+           label_roots = F, label_leaves = F)
+
+```
+
+### Making branch.path
+```{r}
+tmp1 <- data.frame(cells = colnames(cds.branch1), binary = 1)
+tmp2 <- data.frame(cells = colnames(cds.branch2), binary = 3)
+
+
+branch1 <- tmp1$cells[tmp1$cells %nin% tmp2$cells == T]
+branch2 <- tmp2$cells[tmp2$cells %nin% tmp1$cells == T]
+
+both <- tmp1$cells[tmp1$cells %in% tmp2$cells == T]
+
+
+branch1.df <- data.frame(cell = branch1, branch.path = 'branch1')
+branch2.df <- data.frame(cell = branch2, branch.path = 'branch2')
+both.df <- data.frame(cell = both, branch.path = 'both')
+
+combined.df <- rbind(branch1.df, branch2.df, both.df)
+combined.df <- combined.df[order(match(combined.df$cell, colnames(updated.seurat))),]
+
+
+updated.seurat$branch.path <- combined.df$branch.path
+cds.master@colData$branch.path <- updated.seurat$branch.path
+plot_cells(cds.master, color_cells_by = 'branch.path')
+
+rm(tmp1, tmp2, combined.df, branch1.df, branch2.df, both.df, branch1, branch2, both)
+```
+
+## ^^^ RUN HERE
+## cds.master for young-aged separately
+```{r}
+cds.FULL.young <- cds.master[, which(cds.master@colData$condition.id == "Young")]
+
+x <- cds.FULL.young
+plot_cells(cds.FULL.young, label_cell_groups = F, cell_size = 3)
+
+x <- preprocess_cds(x, num_dim = 3)
+x <- align_cds(x, num_dim = 10, alignment_group = 'cell.id',  alignment_k = 50, verbose = T)
+
+x <- reduce_dimension(x, umap.n_neighbors = 200,  umap.min_dist = 0.5) #150 is good
+
+x <- cluster_cells(x, k = 7) ## lower makes more, smaller branches. default is 20
+x <- learn_graph(x, use_partition = F)
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'condition.id')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'injury.dpi')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'celltype.seurat')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, genes = c("Pax7", "Myog", "Myh4", "Myh1"), scale_to_range = T)
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = T, label_cell_groups = F)
+
+x <- order_cells(x, root_pr_nodes = 'Y_185')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'pseudotime')
+
+x@colData$monocle.clusters.working <- x@clusters@listData$UMAP$clusters
+
+cds.FULL.young  <- x
+```
+
+## cds.master for young-aged separately
+```{r}
+cds.FULL.aged <- cds.master[, which(cds.master@colData$condition.id == "Aged")]
+
+x <- cds.FULL.aged
+plot_cells(cds.FULL.aged, label_cell_groups = F, cell_size = 3)
+
+x <- preprocess_cds(x, num_dim = 3)
+x <- align_cds(x, num_dim = 10, alignment_group = 'cell.id',  alignment_k = 50, verbose = T)
+
+x <- reduce_dimension(x, umap.n_neighbors = 200,  umap.min_dist = 0.5) #150 is good
+
+x <- cluster_cells(x, k = 7) ## lower makes more, smaller branches. default is 20
+x <- learn_graph(x, use_partition = F)
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'condition.id')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'injury.dpi')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'celltype.seurat')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, genes = c("Pax7", "Myog", "Myh4", "Myh1"), scale_to_range = T)
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = T, label_cell_groups = F)
+
+x <- order_cells(x, root_pr_nodes = 'Y_200')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'pseudotime')
+
+x@colData$monocle.clusters.working <- x@clusters@listData$UMAP$clusters
+
+cds.FULL.aged  <- x
+```
+### For jacob - cds.master young and aged
+```{r}
+dir <- "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/Branch1_Branch2_combined/"
+# pseudotime.df
+pseudotime.df.young <- data.frame(cells = rownames(colData(cds.FULL.young)),
+                                  pseudotime = pseudotime(cds.FULL.young))
+pseudotime.df.aged <- data.frame(cells = rownames(colData(cds.FULL.aged)),
+                                  pseudotime = pseudotime(cds.FULL.aged))
+
+write.csv(pseudotime.df.young, file = paste(sep = "", dir, 'Branch1_Branch2_combined_young_pseudotime.csv'))
+write.csv(pseudotime.df.aged, file = paste(sep = "", dir, 'Branch1_Branch2_combined_aged_pseudotime.csv'))
+
+# counts.mtx
+counts.young <- counts(cds.FULL.young)
+counts.aged <- counts(cds.FULL.aged)
+
+
+writeMM(counts.young, file = paste(sep = "", dir, 'Branch1_Branch2_combined_young_counts.mtx'))
+writeMM(counts.aged, file = paste(sep = "", dir, 'Branch1_Branch2_combined_aged_counts.mtx'))
+
+# cellnames_list.txt
+cell.names.young <- colnames(counts.young)
+cell.names.aged <- colnames(counts.aged)
+
+write.genelist.fun(cell.names.young, filename = paste(sep = "", dir, 'Branch1_Branch2_combined_young_cellname_list.txt'), paste = 0)
+write.genelist.fun(cell.names.aged, filename = paste(sep = "", dir, 'Branch1_Branch2_combined_aged_cellname_list.txt'), paste = 0)
+```
+
+## Young/Aged combined -- Branch1
+```{r}
+# x <- cds.branch1
+# 
+# x <- preprocess_cds(x, num_dim = 3)
+# x <- align_cds(x, num_dim = 50, alignment_group = 'cell.id',  alignment_k = 200, verbose = T)
+# x <- reduce_dimension(x, umap.n_neighbors = 300,  umap.min_dist = 0.1) #150 is good
+# 
+# x <- cluster_cells(x, k = 20, random_seed = 1 ) ## lower makes more, smaller branches. default is 20
+# x <- learn_graph(x, use_partition = F)
+
+x <- cds.branch1.full
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'condition.id') + scale_color_manual(values = c('red', 'black'))
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'injury.dpi')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'celltype.seurat')
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, genes = c("Pax7", 'Myod1', "Myog", "Mest"), scale_to_range = T)
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, color_cells_by = 'injury.dpi')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, color_cells_by = 'monocle.clusters.working')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = T, label_cell_groups = F)
+
+# x <- order_cells(x, root_pr_nodes = 'Y_50')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'pseudotime')
+
+# cds.branch1.full <- x
+```
+
+## Young only -- Branch1
+```{r}
+cds.branch1.young <- cds.branch1[, which(cds.branch1@colData$condition.id == "Young")]
+
+x <- cds.branch1.young
+plot_cells(cds.branch1.young, label_cell_groups = F, cell_size = 3)
+
+x <- preprocess_cds(x, num_dim = 3)
+x <- align_cds(x, num_dim = 10, alignment_group = 'cell.id',  alignment_k = 50, verbose = T)
+
+x <- reduce_dimension(x, umap.n_neighbors = 200,  umap.min_dist = 0.5) #150 is good
+
+x <- cluster_cells(x, k = 7) ## lower makes more, smaller branches. default is 20
+x <- learn_graph(x, use_partition = F)
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'condition.id')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'injury.dpi')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'celltype.seurat')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, genes = c("Pax7", "Myog", "Myod1", "Mest"), scale_to_range = T)
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = T, label_cell_groups = F)
+
+x <- order_cells(x, root_pr_nodes = 'Y_26')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'pseudotime')
+
+x@colData$monocle.clusters.working <- x@clusters@listData$UMAP$clusters
+
+cds.branch1.young  <- x
+```
+## Aged only -- Branch1
+```{r}
+cds.branch1.aged <- cds.branch1[, which(cds.branch1@colData$condition.id == "Aged")]
+
+x <- cds.branch1.aged
+plot_cells(cds.branch1.aged, label_cell_groups = F, cell_size = 3)
+
+
+x <- preprocess_cds(x, num_dim = 3)
+x <- align_cds(x, num_dim = 10, alignment_group = 'cell.id',  alignment_k = 50, verbose = T)
+x <- reduce_dimension(x, umap.n_neighbors = 200,  umap.min_dist = 0.5) #150 is good
+
+x <- cluster_cells(x, k = 7) ## lower makes more, smaller branches. default is 20
+x <- learn_graph(x, use_partition = F)
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'condition.id')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'injury.dpi')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'celltype.seurat')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = .8, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, genes = c("Pax7", "Myog", "Myod1", "Mest", "Mgp", "Itma"), scale_to_range = T)
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = T, label_cell_groups = F)
+
+x <- order_cells(x, root_pr_nodes = 'Y_47')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'pseudotime')
+
+x@colData$monocle.clusters.working <- x@clusters@listData$UMAP$clusters
+
+cds.branch1.aged  <- x
+```
+
+
+
+## Young/Aged combined -- Branch2
+```{r}
+#load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/cds_branch2.RData")
+# x <- cds.branch2
+# 
+# x <- preprocess_cds(x, num_dim = 3)
+# x <- align_cds(x, num_dim = 50, alignment_group = 'cell.id',  alignment_k = 200, verbose = T)
+# x <- reduce_dimension(x, umap.n_neighbors = 50,  umap.min_dist = 0.5) #150 is good
+# 
+# 
+# x <- cluster_cells(x, k = 10) ## lower makes more, smaller branches. default is 20
+# x <- learn_graph(x, use_partition = F)
+
+x <- cds.branch2.full
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3,
+           label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, 
+           label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, 
+           color_cells_by = 'condition.id') + scale_color_manual(values = c('red', 'black'))
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, 
+           label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, 
+           color_cells_by = 'injury.dpi')
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, 
+           label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, 
+           color_cells_by = 'celltype.seurat')
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, 
+           label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, 
+           genes = c("Myh3", "Myh8", "Myh1", "Myh4"), scale_to_range = T)
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, 
+           label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, 
+           label_principal_points = F, label_cell_groups = F)
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, 
+           label_principal_points = T, label_cell_groups = F)
+
+# x <- order_cells(x, root_pr_nodes = 'Y_143')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, 
+           label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F,
+           color_cells_by = 'pseudotime')
+
+
+# x@colData$monocle.clusters.working <- x@clusters@listData$UMAP$clusters
+
+cds.branch2.full  <- x
+
+#save(cds1.branch2, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/cds_branch2.RData")
+```
+
+
+## Young only -- Branch2
+```{r}
+cds.branch2.young <- cds.branch2[, which(cds.branch2@colData$condition.id == "Young")]
+
+plot_cells(cds.branch2.young, label_cell_groups = F, cell_size = 3)
+
+x <- cds.branch2.young
+
+x <- preprocess_cds(x, num_dim = 3)
+
+x <- align_cds(x, num_dim = 3, alignment_group = 'cell.id',  alignment_k = 10, verbose = T) 
+
+x <- reduce_dimension(x, umap.n_neighbors = 100,  umap.min_dist = 0.5) 
+
+x <- cluster_cells(x, k = 17) ## lower makes more, smaller branches. default is 20
+x <- learn_graph(x, use_partition = F)
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'condition.id')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'injury.dpi')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'celltype.seurat')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, genes = c("Myh3", "Myh8", "Myh1", "Myh4", "Ncam1", "Pax7"), scale_to_range = T)
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = T, label_cell_groups = F)
+
+x <- order_cells(x, root_pr_nodes = 'Y_49')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'pseudotime')
+
+x@colData$monocle.clusters.working <- x@clusters@listData$UMAP$clusters
+
+cds.branch2.young  <- x
+```
+
+## Aged only -- Branch2
+```{r}
+cds.branch2.aged <- cds.branch2[, which(cds.branch2@colData$condition.id == "Aged")]
+
+x <- cds.branch2.aged
+plot_cells(cds.branch2.aged, label_cell_groups = F, cell_size = 3)
+
+x <- preprocess_cds(x, num_dim = 3)
+x <- align_cds(x, num_dim = 10, alignment_group = 'cell.id',  alignment_k = 50, verbose = T)
+x <- reduce_dimension(x, umap.n_neighbors = 200,  umap.min_dist = 0.5) #150 is good
+
+x <- cluster_cells(x, k = 15) ## lower makes more, smaller branches. default is 20
+x <- learn_graph(x, use_partition = F)
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'condition.id')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'injury.dpi')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'celltype.seurat')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, genes = c("Myh3", "Myh8", "Myh1", "Myh4"), scale_to_range = T)
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = T, label_cell_groups = F)
+
+x <- order_cells(x, root_pr_nodes = 'Y_79')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'pseudotime')
+
+x@colData$monocle.clusters.working <- x@clusters@listData$UMAP$clusters
+
+cds.branch2.aged  <- x
+```
+
+### Saving
+```{r}
+save(cds.branch1,
+     cds.branch1.full,
+     cds.branch1.young,
+     cds.branch1.aged,
+     cds.branch2,
+     cds.branch2.full,
+     cds.branch2.young,
+     cds.branch2.aged,
+     file = '~/R/R_objects/cds_branch_objs.RData')
+```
+

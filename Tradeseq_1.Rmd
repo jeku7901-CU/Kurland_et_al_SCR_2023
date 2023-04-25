@@ -1,0 +1,2178 @@
+# Tradeseq
+
+#### NEED TO RERUN THIS tonight/overnight these were run on the not redone UMAP objects!!! Need to redo this on "cds.branch1.full" and "cds.branch2.full"
+```{r}
+### BRANCH1 !!!
+# cds <- cds.branch1
+cds <- cds.branch1.full
+
+ gene.list <- rownames(cds)
+
+ tmp <- grep("*Rik", gene.list)
+ genelist1 <- gene.list[-tmp]
+
+ tmp <- grep("*Gm", genelist1)
+ genelist2 <- genelist1[-tmp]
+
+ tmp <- grep("*mt-", genelist2)
+ genelist3 <- genelist2[-tmp]
+
+ cds <- cds[rownames(cds) %in% genelist3,]
+
+ vec1 <- data.frame(cds@colData$condition.id)
+ ### set a metadata as its own trajectory
+ df <- data.frame()
+ for (i in 1:nrow(vec1))
+ {
+   df[i,1] <- vec1$cds.colData.condition.id[i]
+   if (vec1$cds.colData.condition.id[i] == 'Aged') {df[i,2] = 1}
+     else { df[i,2] = 0}
+   if (vec1$cds.colData.condition.id[i] == 'Young') {df[i,3] = 1}
+     else { df[i,3] = 0}
+ }
+
+ row.names(df) <- row.names(cds@colData)
+ df <- df[,-1]
+ colnames(df) <- c("Aged", "Young")
+
+ cellWeights <- df
+ pseudotime <- data.frame(pseudotime(cds))
+ pseudotime <- cbind(pseudotime, pseudotime)
+ colnames(pseudotime) <- c("Aged", "Young")
+
+ counts <- exprs(cds)
+ counts <- counts[which(rowSums(counts) > 0),]
+
+# ### Fitgam
+ sce.branch1.aged.young.FULL <- tradeSeq::fitGAM(counts =  counts,
+              pseudotime = pseudotime,
+               cellWeights = cellWeights,
+               nknots = 10)
+
+ save(sce.branch1.aged.young.FULL, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/sce_branch1_aged_young_FULL.RData")
+ #load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/sce_branch1_aged_young_FULL.RData")
+
+ ### BRANCH2 !!! 
+ #cds <- cds.branch2
+ cds <- cds.branch2.full
+ gene.list <- rownames(cds)
+ 
+ tmp <- grep("*Rik", gene.list)
+ genelist1 <- gene.list[-tmp]
+ tmp <- grep("*Gm", genelist1)
+ genelist2 <- genelist1[-tmp]
+ tmp <- grep("*mt-", genelist2)
+ genelist3 <- genelist2[-tmp]
+ 
+ cds <- cds[rownames(cds) %in% genelist3,]
+ 
+ vec1 <- data.frame(cds@colData$condition.id)
+ ### set a metadata as its own trajectory
+ df <- data.frame()
+ for (i in 1:nrow(vec1))
+ {
+   df[i,1] <- vec1$cds.colData.condition.id[i]
+   if (vec1$cds.colData.condition.id[i] == 'Aged') {df[i,2] = 1} 
+     else { df[i,2] = 0}
+   if (vec1$cds.colData.condition.id[i] == 'Young') {df[i,3] = 1} 
+     else { df[i,3] = 0}
+ }
+ row.names(df) <- row.names(cds@colData)
+ df <- df[,-1]
+ colnames(df) <- c("Aged", "Young")
+ 
+ cellWeights <- df
+ pseudotime <- data.frame(pseudotime(cds))
+ pseudotime <- cbind(pseudotime, pseudotime)
+ colnames(pseudotime) <- c("Aged", "Young")
+ 
+ counts <- exprs(cds)
+ counts <- counts[which(rowSums(counts) > 0),]
+ 
+ ### Fitgam
+ sce.branch2.aged.young.FULL <- tradeSeq::fitGAM(counts =  counts,
+               pseudotime = pseudotime,
+               cellWeights = cellWeights,
+               nknots = 10)
+ save(sce.branch2.aged.young.FULL, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/sce_branch2_aged_young_FULL.RData")
+ #load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/sce_branch2_aged_young_FULL.RData")
+```
+
+
+### Patterntests
+
+#### Branch1
+```{r}
+load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/sce_branch1_aged_young_FULL.RData")
+patterntest.branch1.full <- patternTest(sce.branch1.aged.young.FULL, l2fc = log2(1))
+
+patterntest.branch1.full.sig <- patterntest.branch1.full[which(patterntest.branch1.full$pvalue < 0.05), ]
+patterntest.branch1.full.sig.ordered <- patterntest.branch1.full.sig[order(patterntest.branch1.full.sig$waldStat, decreasing = TRUE),]
+patterntest.branch1.full.sig.ordered
+
+write.csv(patterntest.branch1.full.sig.ordered, 
+          file = "~/Desktop/snRNAseq/PNAS_resubmission/tables/v1/TableS6_branch1_patterntest.csv")
+
+write.genelist.fun(gene.list = rownames(patterntest.branch1.full.sig.ordered)[1:1000],
+                   filename =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch1_patterntest_ordered.txt",
+                   paste = 0)
+```
+
+#### Branch2
+```{r}
+patterntest.branch2.full <- patternTest(sce.branch2.aged.young.FULL, l2fc = log2(1))
+
+patterntest.branch2.full.sig <- patterntest.branch2.full[which(patterntest.branch2.full$pvalue < 0.05), ]
+patterntest.branch2.full.sig.ordered <- patterntest.branch2.full.sig[order(patterntest.branch2.full.sig$waldStat, decreasing = TRUE),]
+patterntest.branch2.full.sig.ordered
+
+write.csv(patterntest.branch2.full.sig.ordered, 
+          file = "~/Desktop/snRNAseq/PNAS_resubmission/tables/v1/TableS7_branch2_patterntest.csv")
+
+write.genelist.fun(gene.list = rownames(patterntest.branch2.full.sig.ordered)[1:1000],
+                   filename =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch2_patterntest_ordered.txt",
+                   paste = 0)
+```
+
+
+### Upstream TFs Branch1
+```{r}
+branch1_Trust_TFs <- upstream.tf.plotting.fun(enrich.df.filepath =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch1_Trust_TFs.csv", sce = sce.branch1.aged.young.FULL)
+upstream.tf.plotting.fun(enrich.df.filepath =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch1_Trust_TFs.csv", sce = sce.branch1.aged.young.FULL, print.list = F)
+```
+
+### Upstream TFs Branch2
+```{r}
+branch2_Trust_TFs <- upstream.tf.plotting.fun(enrich.df.filepath =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch2_Trust_TFs.csv", 
+                         sce = sce.branch2.aged.young.FULL,
+                         print.list = T)
+upstream.tf.plotting.fun(enrich.df.filepath =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch2_Trust_TFs.csv", 
+                         sce = sce.branch2.aged.young.FULL,
+                         print.list = F)
+```
+
+```{r}
+branc2_Archs4_TFs <- upstream.tf.plotting.fun(enrich.df.filepath =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch2_arch4TF.csv", 
+                         sce = sce.branch2.aged.young.FULL,
+                         print.list = T)
+upstream.tf.plotting.fun(enrich.df.filepath =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch2_arch4TF.csv", 
+                         sce = sce.branch2.aged.young.FULL,
+                         print.list = F)
+```
+
+
+### Do Branch1 vs Branch2 findmarkers and go through Enrichr -- 
+#### try to find TF/genes that are not changing in pseudotime --- cross with patterntest
+
+#### Branch1
+```{r}
+updated.seurat.tmp <- SetIdent(updated.seurat, value = 'branch.path')
+branch.path.markers <- FindAllMarkers(updated.seurat.tmp)
+
+branch.path.markers %>% group_by(cluster) %>% top_n(wt = avg_log2FC, n = 30)
+
+branch1.markers.sig <- rownames(branch.path.markers)[which(branch.path.markers$p_val_adj < 0.05 & branch.path.markers$avg_log2FC > 0 & branch.path.markers$cluster == 'branch1')]
+branch1.markers.genes <- c()
+for (i in 1:length(tmp1))
+  {branch1.markers.genes[i] <- strsplit(branch1.markers.sig[i], split = ".", 1)[[1]][1]}
+
+branch1.markers.genes.not.pattern <- branch1.markers.genes[which(branch1.markers.genes %nin% rownames(patterntest.branch1.full.sig) == T)]
+
+
+write.genelist.fun(branch1.markers.genes, filename = 'Branch1_findmarkers.txt', paste = 2)
+write.genelist.fun(branch1.markers.genes.not.pattern, filename = 'Branch1_findmarkers_NOTINPATTERNTEST.txt', paste = 2)
+```
+
+```{r}
+upstream.tf.plotting.fun(enrich.df.filepath =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch1_ctrl_encode_chea.csv", 
+                         sce = sce.branch1.aged.young.FULL,
+                         print.list = F)
+```
+
+
+#### Branch2
+```{r}
+branch2.markers.genes.sig <- rownames(branch.path.markers)[which(branch.path.markers$p_val_adj < 0.05 & branch.path.markers$avg_log2FC > 0 & branch.path.markers$cluster == 'branch2')]
+branch2.markers.genes <- c()
+for (i in 1:length(branch2.markers.genes.sig))
+  {branch2.markers.genes[i] <- strsplit(branch2.markers.genes.sig[i], split = ".", 1)[[1]][1]}
+
+branch2.markers.genes.not.pattern <- branch2.markers.genes[which(branch2.markers.genes %nin% rownames(patterntest.branch2.full.sig.ordered) == T)]
+branch2.markers.genes.not.pattern.clean <- branch2.markers.genes.not.pattern[-grep("*Rik", branch2.markers.genes.not.pattern)]
+branch2.markers.genes.not.pattern.clean <- branch2.markers.genes.not.pattern.clean[-grep("*Gm", branch2.markers.genes.not.pattern.clean)]
+
+
+write.genelist.fun(branch2.markers.genes, filename = 'Branch2_findmarkers.txt', paste = 2)
+write.genelist.fun(branch2.markers.genes.not.pattern.clean, filename = 'Branch2_findmarkers_CLEAN_NOTINPATTERNTEST.txt', paste = 2)
+write.genelist.fun(branch2.markers.genes.not.pattern, filename = 'Branch2_findmarkers_NOTINPATTERNTEST.txt', paste = 2)
+
+```
+
+```{r}
+#upstream.tf.plotting.fun(enrich.df.filepath =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch2_ctrl_genome_browser_PWMs.csv", sce = sce.branch2.aged.young.FULL)
+upstream.tf.plotting.fun(enrich.df.filepath =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch2_ctrl_TF_pertubations.csv", sce = sce.branch2.aged.young.FULL, 
+                         print.list = F)
+```
+
+```{r}
+branch2.ctrl_archs4_TFs <- upstream.tf.plotting.fun(enrich.df.filepath =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch2_ctrl_archs4_TFs.csv", 
+                         sce = sce.branch2.aged.young.FULL,
+                         print.list = T)
+upstream.tf.plotting.fun(enrich.df.filepath =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch2_ctrl_archs4_TFs.csv", 
+                         sce = sce.branch2.aged.young.FULL,
+                         print.list = F)
+```
+
+### gene.plotting.function --- panther go pathways enriched for glycolysis
+```{r}
+#genelist <- as.vector(read.table("~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/panther_out_glycolysis_genes1.txt")[,1])
+genelist <- strsplit('Hdac4
+Lamc1
+Lama5
+Kcnc4
+Col4a5
+Des
+Camk2d
+Musk
+Pdzrn3
+Lrp4
+Prkcq
+App
+Serpine2
+Ank3
+Prkce
+Pclo
+Itgb1
+Ppp1r9a
+Kcnn3
+Slc8a3
+Sync
+Postn
+Utrn', split = '\n')
+ 
+#gene.plotting.function(genelist = genelist[[1]], sce = sce.branch1.aged.young.FULL)
+gene.plotting.function(genelist = genelist[[1]], sce = sce.branch2.aged.young.FULL)
+
+```
+```{r}
+genelist <- c("Chrna1", "Chrne", "Chrng")
+#gene.plotting.function(genelist = genelist, sce = sce.branch1.aged.young.FULL)
+gene.plotting.function(genelist = genelist, sce = sce.branch2.aged.young.FULL)
+
+```
+```{r}
+# NMJ full
+genelist.not.diff <- strsplit('Nrg1
+Cib2
+Alg
+Psen2
+Prkaca
+Dlg4
+Ache
+Chrne
+Crkl
+Hdac4
+Lamc1
+Cav3
+Chrna1
+Syngr1
+Psen1
+Syp
+Snta1
+Apbb1
+Myh9
+Nefm
+Syt2
+Dok7
+Syngr4
+Lama5
+Ptn
+Kcnc4
+Col4a5
+Elf1
+Efna2
+Ascc1
+Stxbp5l
+Dnaja3
+Des
+Camk2d
+Musk
+Pls3
+Pdzrn3
+Fchsd1
+Trip4
+Akap1
+Lrp4
+Prkcq
+Gria1
+Epha4
+Lamb2
+App
+Serpine2
+Sv2a
+Lama2
+P2rx7
+Stxbp5
+Myh10
+Kcnc3
+Unc13c
+Cyth1
+Erbin
+Dlgap4
+Rapsn
+F2r
+Ank3
+Slc5a7
+Prkce
+Dnajc5
+Dlg1
+Vamp1
+Tbc1d24
+Pclo
+Unc13b
+Unc13a
+Thbs4
+Syngr3
+Lama4
+Dlg2
+Ache
+Itgb1
+Dap3
+Dlgap3
+Chrnd
+Prkar1a
+Unc13a
+Cxadr
+Cdk5r1
+Ppp1r9a
+Colq
+Spock1
+Rph3a
+Kcnn3
+Chrnb1
+Nrxn1
+Slc8a3
+Itga7
+Stx1b
+Nlgn1
+Fchsd2
+Sync
+Postn
+Utrn', split = '\n')
+
+genelist.diff <- strsplit('Hdac4
+Lamc1
+Lama5
+Kcnc4
+Col4a5
+Des
+Camk2d
+Musk
+Pdzrn3
+Lrp4
+Prkcq
+App
+Serpine2
+Ank3
+Prkce
+Pclo
+Itgb1
+Ppp1r9a
+Kcnn3
+Slc8a3
+Sync
+Postn
+Utrn', split = '\n')
+ 
+genelist.not.diff.not.diff <- genelist.not.diff[[1]][which(genelist.not.diff[[1]] %in% genelist.diff[[1]] == F)]
+gene.plotting.function(genelist = unique(genelist.not.diff.not.diff), sce = sce.branch2.aged.young.FULL)
+gene.plotting.function(genelist = unique(genelist.diff[[1]]), sce = sce.branch2.aged.young.FULL)
+
+```
+### Axonogenesis
+```{r}
+axon.full <- strsplit('Plxnc1
+Tspan2
+Pitpna
+Plxna3
+Cdk5
+Trim32
+Slitrk6
+Numb
+Ephb2
+Lmtk2
+Dpysl2
+Prkca
+Adcy1
+Slitrk2
+Uchl1
+Myot
+Igf1r
+Rab3a
+Sema3c
+Nectin1
+Chn1
+Tgfb2
+B3gnt6
+Gsk3b
+Bsg
+Epha10
+Hoxa2
+Ulk2
+Dst
+Efna1
+Dscam
+Mypn
+Lgi1
+Taok2
+Csf1r
+Scn1b
+Nrn1
+Evl
+Robo3
+Ttf1
+Rtn4rl1
+Dvl1
+Casp6
+Tsku
+Wnt7b
+Cntn5
+Shtn1
+Sema4f
+Atp8a2
+Rtn4
+Arhgap35
+Cck
+Drd2
+Gas1
+Ephb6
+Dock7
+Notch1
+Sema3b
+Sema6d
+Nog
+Grm7
+Slitrk1
+Edn3
+Stmn1
+Dcc
+Nefh
+Etv4
+Kif5c
+Brsk2
+Apbb1
+Flrt3
+Lrp2
+Plxna1
+Cntnap1
+Vegfa
+Nin
+Cobl
+Top2b
+Efnb2
+Elf2
+Efna5
+Numbl
+Bdnf
+Stxbp1
+Smad4
+Trim46
+Reln
+B4galt5
+B3gnt2
+Mycbp2
+Pla2g10
+Alcam
+Arx
+Robo1
+Rtn4r
+Ctnna2
+Bex1
+Sema4d
+Cdh4
+Hsp90aa1
+Plxnd1
+Grcc10
+Lama5
+Epha1
+Lamc2
+Abl1
+Vasp
+Elf1
+Efna2
+Col25a1
+Cntn4
+Tec,Nr4a3
+Nptx1
+Epha8
+Ddr1
+Rit1
+Bcl11b
+Fbxo45
+Foxd1
+Gli3
+Cxcl12
+Klf7
+Mag
+Lhx1
+Ednra
+Rnf165
+Unc5a
+Efnb1
+Nr2e1
+Sema3g
+Prrxl1
+Pten
+Rhoh
+Nrcam
+Dlx5
+Cnp
+Sema3d
+Aplp1
+Wnt5a
+Ncam1
+Adarb1
+Gdnf
+Usp9x
+Efna3
+Ece1
+Mark2
+Plxna2
+Ntng1
+Camsap2
+Szt2
+Ttc8
+Stk11
+Mapt
+Epha6
+Chl1
+Prtg
+Egr2
+Ptpn11
+Epha5
+Gfra3
+Smn1
+Gata3
+Ephb3
+Epha4
+Epb41l3
+Ext1
+Slit1
+Lamb2
+Ulk1
+Nptn
+App
+Lmx1a
+Epha2
+Pmp22
+Crmp1
+Ptprm
+Bmpr1b
+Ptpro
+Sema4a
+Rac1
+Nfasc
+Tnn
+Nrep
+Plxnb1
+Lama2
+Nrp2
+Sema6c
+Vax1
+Zeb2
+Nr4a2
+Cntnap2
+Tnfrsf21
+Aplp2
+Stxbp5
+Myh10
+Plp1
+Draxin
+Nfib
+Zdhhc17
+Vcl
+Cntn6
+Ablim1
+Hdac6
+Casp3
+Auts2
+Llgl1
+Vstm2l
+Gli2
+Ank3
+Kalrn
+Ptch1
+Enpp1
+Otx2
+Foxp1
+Lrtm2
+Enah
+Pou4f3
+Lrp1
+Bhlhe22
+Sema6a
+Etv1
+Jak2
+Mtr
+Unc5b
+Net1
+Ntn1
+L1cam
+Sema4b
+Gap43
+Cdh11
+Ndn
+Vash2
+Matn2
+Efnb3
+Runx3
+Cntn2
+Mgarp
+Slc25a46
+Wnt3a
+Sema5b
+Kif5b
+Dhfr
+Map2
+B4galt6
+Robo2
+Epha7
+Rab8a
+Dcx
+Dcn
+Brsk1
+Ntf3
+Gdf7
+Sema5a
+Ntn3
+Vangl2
+Slitrk5
+Tbc1d24
+Dpysl5
+Pak3
+Stk4
+Mef2c
+Crppa
+Flot1
+Efna4
+Cntn1
+Crtac1
+Cep68
+Fgfr2
+Slitrk4
+Cxcr4
+Usp33
+Epha3
+Emb
+Slit3
+Apbb2
+Megf8
+Nlgn3
+Arhgef25
+Map1a
+Wnt3
+Rhog
+Pip5k1c
+Ryk
+Folr1
+Fbp1
+Itga4
+Flrt2
+Rpl24
+Igfals
+Atg7
+Amigo1
+Prdm8
+Kif5a
+Gbx2
+Rtn4rl2
+Lama3
+Celsr3
+Chrnb2
+Erbb2
+Plxna4
+Nrp1
+Plxnb2
+Rab10
+Ntng2
+Cyfip1
+Mapk8ip3
+Mmp2
+Lgr4
+Tctn1
+Sema4c
+Cnr1
+Itgb1
+Arhgef28
+Ntn5
+Afg3l2
+Lama1
+Jun
+Plppr4
+Tenm2
+Creb1
+Dclk1
+Trio
+Sema3f
+Ptk2
+Svbp
+Cdk5r1
+Bcl2
+Sptbn4
+Dscaml1
+Hoxa1
+Artn
+Als2
+Plxnb3
+Hsp90ab1
+Lrtm1
+Ndel1
+Apc
+Sema3e
+Ptprz1
+Zpr1
+Sema6b
+Actb
+Cacna1f
+Dag1
+Unc5c
+Picalm
+Vax2
+Ephb1
+Olfr160
+Ngfr
+Map1s
+Rac2
+Sema7a
+Neo1
+Nexn
+Map1b
+Raph1
+Ephb4
+Snap91
+Sema3a
+Slc9a6
+Gbx1
+Edn1
+Tnc
+Spg11
+Unc5d
+Notch3
+Fzd3
+Slit2
+Boc
+Tbce
+Atl1
+Smo
+Zic2
+Fgfr3', split = '\n')
+
+axon.diff <- strsplit('Pitpna
+Prkca
+Myot
+Dst
+Vegfa
+Mycbp2
+Lama5
+Tec
+Nr4a3
+Klf7
+Ncam1
+Gdnf
+Ece1
+Plxna2
+Mapt
+Nptn
+App
+Nrep
+Sema6c
+Ccdc141
+Auts2
+Ank3
+Enah
+Sema6a
+Jak2
+Kif5b
+Stk4
+Mef2c
+Fgfr2
+Nrp1
+Itgb1
+Jun
+Lrtm1
+Ndel1
+Actb
+Neo1
+Nexn
+Map1b
+Raph1', split = '\n')
+
+axon.not.diff <- axon.full[[1]][which(axon.full[[1]] %in% axon.diff[[1]] == F)]
+gene.plotting.function(genelist = unique(axon.not.diff), sce = sce.branch2.aged.young.FULL)
+gene.plotting.function(genelist = unique(axon.diff[[1]]), sce = sce.branch2.aged.young.FULL)
+```
+
+
+
+### Glycolysis
+```{r}
+glycolysis.full <- strsplit('Ganc
+H6pd
+Oas1g
+Eno2
+Pdk4
+Pdk2
+Ins2
+Tpi1
+Myc
+Pck1
+Bad
+Cbr2
+Gapdhs
+Pdha1
+Per2
+Tnf
+Car5a
+G6pc3
+Kbtbd2
+Mapk14
+Cpt1a
+G6pdx
+Tfap2b
+Mdh1
+Fabp5
+Pgm2
+Pgm1
+Pfkm
+Dlat
+Brat1
+Aldoc
+Slc2a8
+Pcx
+Ldha
+Pkm
+AC015535
+Prkaa1
+Pdk3
+Usf1
+Pik3ca
+Tcf4
+Tcf7l2
+Inppl1
+Oma1
+Gpd2
+Fbn1
+Hk2
+G6pc
+Pdx1
+Kcnj11
+Eno3
+Pck2
+Apod
+Pdhb
+Lep
+Atf4
+Akt1
+Gdpgp1
+Sds,Tdh
+Slc39a14
+Adpgk
+Igf2
+Pdk1
+Adipoq
+Lrp5
+Pgam2
+Pgam1
+Gck
+Galm
+Cry1
+Pgk1
+AC015535
+Oas1a
+Gapdh
+Pfkp
+Ppara
+Atf3
+Slc37a4
+Nisch
+Aldoa
+Hectd4
+Foxk2
+Oas1c
+Pik3r1
+Pgm5
+Pgm2l1
+Pgm2
+Pgm1
+Wdtc1
+Oas1e
+Fbp2
+Hk1
+Kcnq1
+Mdh2
+Akt2
+Serp1
+Fbp1
+Crtc2
+Npy1r
+Pfkl
+Dcxr
+Eno1
+Pfkfb2
+Foxk1
+Gpd1', split = '\n')
+
+glycolysis.diff <- strsplit('Pdk4
+Tpi1
+Mdh1
+Pgm1
+Pfkm
+Dlat
+Ldha
+Gpd2
+Hk2
+Eno3
+Slc39a14
+Pgam2
+Pgk1
+Ppara
+Aldoa
+Pgm5
+Pik3r1
+Pgm1
+Mdh2
+Eno1
+Gpd1', split = '\n')
+
+glycolysis.not.diff <- glycolysis.full[[1]][which(glycolysis.full[[1]] %in% glycolysis.diff[[1]] == F)]
+gene.plotting.function(genelist = unique(glycolysis.not.diff), sce = sce.branch2.aged.young.FULL)
+gene.plotting.function(genelist = unique(glycolysis.diff[[1]]), sce = sce.branch2.aged.young.FULL)
+```
+
+### Subset out just alter stage myonuclei for Tradeseq
+```{r}
+plot_cells(cds.branch2.full, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3,
+           label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+```
+
+```{r}
+cds.branch2.full.tmp <- cds.branch2.full
+cds.branch2.full.tmp@colData$branch2.clusters <- cds.branch2.full.tmp@clusters@listData$UMAP$clusters
+
+
+cds.branch2.sub <- cds.branch2.full.tmp[, which(as.vector(as.numeric(cds.branch2.full.tmp@colData$branch2.clusters)) != 7 & 
+                                                as.vector(as.numeric(cds.branch2.full.tmp@colData$branch2.clusters)) != 9)] #&
+                                                #as.vector(as.numeric(cds.branch2.full.tmp@colData$branch2.clusters)) != 4)]
+
+plot_cells(cds.branch2.sub, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3,
+           label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+
+plot_cells(cds.branch2.sub, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3,
+           label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'condition.id') + scale_color_manual(values = mets.cols)
+
+plot_cells(cds.branch2.full, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3,
+           label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, genes = c("Myh3", "Myh8"), scale_to_range = T)
+plot_cells(cds.branch2.sub, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3,
+           label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, genes = c("Myh3", "Myh8"), scale_to_range = T)
+```
+
+```{r}
+
+x <- cds.branch2.sub
+plot_cells(cds.branch2.sub, label_cell_groups = F, cell_size = 3)
+
+x <- preprocess_cds(x, num_dim = 3)
+x <- align_cds(x, num_dim = 10, alignment_group = 'cell.id',  alignment_k = 500, verbose = T)
+
+x <- reduce_dimension(x, umap.n_neighbors = 50,  umap.min_dist = 0.5) #150 is good
+
+x <- cluster_cells(x, k = 20) ## lower makes more, smaller branches. default is 20
+x <- learn_graph(x, use_partition = F)
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'condition.id')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'injury.dpi')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'celltype.seurat')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, genes = c("Myh1", "Myh4", "Myh8", "Myh3"), scale_to_range = T)
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = T, label_cell_groups = F)
+
+x <- order_cells(x, root_pr_nodes = 'Y_94')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'pseudotime')
+
+x@colData$monocle.clusters.working <- x@clusters@listData$UMAP$clusters
+
+cds.branch2.sub.umap  <- x
+```
+
+### cds.branch2.sub.young
+```{r}
+cds.branch2.sub.young <- cds.branch2.sub[,which(cds.branch2.sub@colData$condition.id == 'Young')]
+x <- cds.branch2.sub.young
+plot_cells(cds.branch2.sub.young, label_cell_groups = F, cell_size = 3)
+
+x <- preprocess_cds(x, num_dim = 3)
+x <- align_cds(x, num_dim = 10, alignment_group = 'cell.id',  alignment_k = 500, verbose = T)
+
+x <- reduce_dimension(x, umap.n_neighbors = 200,  umap.min_dist = 0.5) #150 is good
+
+x <- cluster_cells(x, k = 15) ## lower makes more, smaller branches. default is 20
+x <- learn_graph(x, use_partition = F)
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'condition.id')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'injury.dpi')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'celltype.seurat')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, genes = c("Myh1", "Myh4", "Myh8", "Myh3"), scale_to_range = T)
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = T, label_cell_groups = F)
+
+x <- order_cells(x, root_pr_nodes = 'Y_26')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'pseudotime')
+
+x@colData$monocle.clusters.working <- x@clusters@listData$UMAP$clusters
+
+cds.branch2.sub.young  <- x
+```
+### cds.branch2.sub.aged
+```{r}
+cds.branch2.sub.aged <- cds.branch2.sub[,which(cds.branch2.sub@colData$condition.id == 'Aged')]
+x <- cds.branch2.sub.aged
+plot_cells(cds.branch2.sub.aged, label_cell_groups = F, cell_size = 3)
+
+x <- preprocess_cds(x, num_dim = 3)
+x <- align_cds(x, num_dim = 10, alignment_group = 'cell.id',  alignment_k = 500, verbose = T)
+
+x <- reduce_dimension(x, umap.n_neighbors = 100,  umap.min_dist = 0.5) #150 is good
+
+x <- cluster_cells(x, k = 15) ## lower makes more, smaller branches. default is 20
+x <- learn_graph(x, use_partition = F)
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'condition.id')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'injury.dpi')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'celltype.seurat')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, genes = c("Myh1", "Myh4", "Myh8", "Myh3"), scale_to_range = T)
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = T, label_cell_groups = F)
+
+x <- order_cells(x, root_pr_nodes = 'Y_12')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'pseudotime')
+
+x@colData$monocle.clusters.working <- x@clusters@listData$UMAP$clusters
+
+cds.branch2.sub.aged  <- x
+```
+
+### Jacob files
+```{r}
+dir <- "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/Branch2_myonuclear_subset2/"
+cds.branch2.sub.young
+
+pseudotime.df.young <- data.frame(cells = rownames(colData(cds.branch2.sub.young)),
+                                  pseudotime = pseudotime(cds.branch2.sub.young))
+pseudotime.df.aged <- data.frame(cells = rownames(colData(cds.branch2.sub.aged)),
+                                  pseudotime = pseudotime(cds.branch2.sub.aged))
+
+write.csv(pseudotime.df.young, file = paste(dir, "Branch2_myonuclear_subset2_young_pseudotime.csv", sep = ""))
+write.csv(pseudotime.df.aged, file = paste(dir, "Branch2_myonuclear_subset2_aged_pseudotime.csv", sep = ""))
+
+# counts.mtx
+counts.young <- counts(cds.branch2.sub.young)
+counts.aged <- counts(cds.branch2.sub.aged)
+
+writeMM(counts.young,  file = paste(dir, 'Branch2_myonuclear_subset2_young_counts.mtx', sep = ""))
+writeMM(counts.aged, file = paste(dir, 'Branch2_myonuclear_subset2_aged_counts.mtx', sep = ""))
+
+# cellnames_list.txt
+cell.names.young <- colnames(counts.young)
+cell.names.aged <- colnames(counts.aged)
+
+write.genelist.fun(cell.names.young, filename = paste(dir, 'Branch2_myonuclear_subset2_young_cellname_list.txt'),  paste = 0)
+write.genelist.fun(cell.names.aged,  filename = paste(dir,  'Branch2_myonuclear_subset2_aged_cellname_list.txt'), paste = 0)
+```
+
+### cds.branch2.subEARLY1
+```{r}
+cds.branch2.full.tmp <- cds.branch2.full
+cds.branch2.full.tmp@colData$branch2.clusters <- cds.branch2.full.tmp@clusters@listData$UMAP$clusters
+
+
+cds.branch2.subEARLY1 <- cds.branch2.full.tmp[, which(as.vector(as.numeric(cds.branch2.full.tmp@colData$branch2.clusters)) != 1 & 
+                                                as.vector(as.numeric(cds.branch2.full.tmp@colData$branch2.clusters)) != 2 &
+                                                as.vector(as.numeric(cds.branch2.full.tmp@colData$branch2.clusters)) != 3 & 
+                                                  as.vector(as.numeric(cds.branch2.full.tmp@colData$branch2.clusters)) != 4 & 
+                                                  as.vector(as.numeric(cds.branch2.full.tmp@colData$branch2.clusters)) != 5 & 
+                                                  as.vector(as.numeric(cds.branch2.full.tmp@colData$branch2.clusters)) != 6 & 
+                                                  as.vector(as.numeric(cds.branch2.full.tmp@colData$branch2.clusters)) != 8 )]
+                                                  
+
+plot_cells(cds.branch2.subEARLY1, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3,
+           label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+```
+
+### cds.branch2.sub.young.EARLY1
+```{r}
+cds.branch2.sub.young.EARLY1 <- cds.branch2.subEARLY1[,which(cds.branch2.subEARLY1@colData$condition.id == 'Young')]
+x <- cds.branch2.sub.young.EARLY1
+plot_cells(cds.branch2.sub.young.EARLY1, label_cell_groups = F, cell_size = 3)
+
+x <- preprocess_cds(x, num_dim = 3)
+x <- align_cds(x, num_dim = 10, alignment_group = 'cell.id',  alignment_k = 500, verbose = T)
+
+x <- reduce_dimension(x, umap.n_neighbors = 200,  umap.min_dist = 0.5) #150 is good
+
+x <- cluster_cells(x, k = 15) ## lower makes more, smaller branches. default is 20
+x <- learn_graph(x, use_partition = F)
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'condition.id')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'injury.dpi')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'celltype.seurat')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, genes = c("Myh1", "Myh4", "Myh8", "Myh3"), scale_to_range = T)
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = T, label_cell_groups = F)
+
+x <- order_cells(x, root_pr_nodes = 'Y_26')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'pseudotime')
+
+x@colData$monocle.clusters.working <- x@clusters@listData$UMAP$clusters
+
+cds.branch2.sub.young.EARLY1  <- x
+```
+# Tradeseq fitting of cds2.sub
+```{r}
+cds <- cds.branch2.sub.umap
+
+ gene.list <- rownames(cds)
+
+ tmp <- grep("*Rik", gene.list)
+ genelist1 <- gene.list[-tmp]
+
+ tmp <- grep("*Gm", genelist1)
+ genelist2 <- genelist1[-tmp]
+
+ tmp <- grep("*mt-", genelist2)
+ genelist3 <- genelist2[-tmp]
+
+ cds <- cds[rownames(cds) %in% genelist3,]
+
+ vec1 <- data.frame(cds@colData$condition.id)
+ ### set a metadata as its own trajectory
+ df <- data.frame()
+ for (i in 1:nrow(vec1))
+ {
+   df[i,1] <- vec1$cds.colData.condition.id[i]
+   if (vec1$cds.colData.condition.id[i] == 'Aged') {df[i,2] = 1}
+     else { df[i,2] = 0}
+   if (vec1$cds.colData.condition.id[i] == 'Young') {df[i,3] = 1}
+     else { df[i,3] = 0}
+ }
+
+ row.names(df) <- row.names(cds@colData)
+ df <- df[,-1]
+ colnames(df) <- c("Aged", "Young")
+
+ cellWeights <- df
+ pseudotime <- data.frame(pseudotime(cds))
+ pseudotime <- cbind(pseudotime, pseudotime)
+ colnames(pseudotime) <- c("Aged", "Young")
+
+ counts <- exprs(cds)
+ counts <- counts[which(rowSums(counts) > 0),]
+
+# ### Fitgam
+ sce.branch2.sub1.aged.young <- tradeSeq::fitGAM(counts =  counts,
+              pseudotime = pseudotime,
+               cellWeights = cellWeights,
+               nknots = 10)
+
+ save(sce.branch2.sub1.aged.young, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/sce_branch2_sub1_aged_young.RData")
+ load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/sce_branch2_sub1_aged_young.RData")
+
+```
+
+### Patterntest on myonuclear subset
+```{r}
+load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/sce_branch2_sub1_aged_young.RData")
+### Pattern test
+patterntest.branch2.sub1.aged.young <- patternTest(sce.branch2.sub1.aged.young, l2fc = log2(1))
+
+#rownames(patterntest.branch2.sub1.aged.young)[oPat.patterntest][1:50]
+
+patterntest.branch2.sub1.aged.young.sig <- patterntest.branch2.sub1.aged.young[which(patterntest.branch2.sub1.aged.young$pvalue < 0.05), ]
+patterntest.branch2.sub1.aged.young.sig.ordered <- patterntest.branch2.sub1.aged.young.sig[order(patterntest.branch2.sub1.aged.young.sig$waldStat, decreasing = TRUE),]
+
+patterntest.branch2.sub1.aged.young.sig.ordered[1:100,]
+
+write.genelist.fun(gene.list = rownames(patterntest.branch2.sub1.aged.young.sig.ordered)[1:1000],
+                   filename =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/patterntest_branch2_sub1_aged_young_sig_ordered.txt", paste = 0)
+
+```
+
+### Making csv files for Jacobs(Jacob) DTW analysis
+
+#### From looking at the biggest difference area 40-60 on the Y_PT scale
+```{r}
+big.difs <- dtw.branch4[which(dtw.branch4$Y_pt > 40 & dtw.branch4$Y_pt < 65 ),]
+
+
+#cds.big.diff.y <- cds.branch2.full[,which(big.difs$Y_umi %in% colnames(counts(cds.branch2.full)))]
+cds.big.diff.y <- cds.branch2.young[,which(big.difs$Y_umi %in% colnames(cds.branch2.young))]
+
+x <- cds.big.diff.y
+plot_cells(cds.big.diff.y, label_cell_groups = F, cell_size = 3, color_cells_by = 'condition.id')
+
+x <- preprocess_cds(x, num_dim = 3)
+x <- align_cds(x, num_dim = 10, alignment_group = 'cell.id',  alignment_k = 10, verbose = T)
+
+x <- reduce_dimension(x, umap.n_neighbors = 50,  umap.min_dist = 0.5) #150 is good
+
+cds.big.diff.y <- x
+
+
+cds.big.diff.a <- cds.branch2.aged[,which(big.difs$A_umi %in% colnames(cds.branch2.aged))]
+
+x <- cds.big.diff.a
+plot_cells(cds.big.diff.a, label_cell_groups = F, cell_size = 3, color_cells_by = 'condition.id')
+
+x <- preprocess_cds(x, num_dim = 3)
+x <- align_cds(x, num_dim = 10, alignment_group = 'cell.id',  alignment_k = 10, verbose = T)
+
+x <- reduce_dimension(x, umap.n_neighbors = 50,  umap.min_dist = 0.5) #150 is good
+
+cds.big.diff.a <- x
+
+#counts.big.difs <- counts(cds.branch2)
+
+pseudotime.df.jacob <- data.frame(Y_umi = big.difs$Y_umi,
+                        A_umi = big.difs$A_umi,
+                        Y_pt = big.difs$Y_pt,
+                        A_pt = big.difs$A_pt)
+
+
+
+counts.for.jacob.y <- counts(cds.big.diff.y)
+counts.for.jacob.y <- counts.for.jacob.y[-which(rowSums(counts.for.jacob.y) == 0),]
+
+counts.for.jacob.a <- counts(cds.big.diff.a)
+counts.for.jacob.a <- counts.for.jacob.a[-which(rowSums(counts.for.jacob.a) == 0),]
+
+
+pt.df.for.jacob.young <- data.frame(young.umi = pseudotime.df.jacob$Y_umi, young.pt = pseudotime.df.jacob$Y_pt) 
+pt.df.for.jacob.aged <- data.frame(aged.umi = pseudotime.df.jacob$A_umi, aged.pt = pseudotime.df.jacob$A_pt) 
+
+writeMM(counts.for.jacob.a, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/Branch2_aged_biggest_difference_subset_counts.mtx")
+writeMM(counts.for.jacob.y, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/Branch2_young_biggest_difference_subset_counts.mtx")
+
+
+write.csv(pt.df.for.jacob.young, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/Branch2_young_biggest_difference_subset_pseudotime.csv")
+write.csv(pt.df.for.jacob.aged, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/Branch2_aged_biggest_difference_subset_pseudotime.csv")
+
+cell.names.young <- colnames(cds.big.diff.y)
+cell.names.aged <- colnames(cds.big.diff.a)
+
+write.genelist.fun(cell.names.young, filename = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/Branch2_young_biggest_difference_subset_cellname_list.txt", paste = 0)
+write.genelist.fun(cell.names.aged, filename = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/Branch2_aged_biggest_difference_subset_cellname_list.txt", paste = 0)
+```
+
+#### Myod target genes (entire Branch2)
+```{r}
+# pseudotime.df
+pseudotime.df.young <- data.frame(cells = rownames(colData(cds.branch2.young)),
+                                  pseudotime = pseudotime(cds.branch2.young))
+pseudotime.df.aged <- data.frame(cells = rownames(colData(cds.branch2.aged)),
+                                  pseudotime = pseudotime(cds.branch2.aged))
+
+write.csv(pseudotime.df.young, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/DTW/Branch2_target_genes_subset_entireBranch2_Myod/Branch2_whole_young_target_genes_subset_Myod_pseudotime.csv")
+write.csv(pseudotime.df.aged, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/DTW/Branch2_target_genes_subset_entireBranch2_Myod/Branch2_whole_aged_target_genes_subset_Myod_pseudotime.csv")
+
+# counts.mtx
+counts.young <- counts(cds.branch2.young)
+counts.aged <- counts(cds.branch2.aged)
+
+counts.young <- counts.young[which(rownames(counts.young) %in% branch2_Trust_TFs$`MYOD1 mouse`),]
+counts.aged <- counts.aged[which(rownames(counts.aged) %in% branch2_Trust_TFs$`MYOD1 mouse`),]
+
+writeMM(counts.young, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/DTW/Branch2_target_genes_subset_entireBranch2_Myod/Branch2_whole_young_target_genes_subset_Myod_counts.mtx")
+writeMM(counts.aged, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/DTW/Branch2_target_genes_subset_entireBranch2_Myod/Branch2_whole_aged_target_genes_subset_Myod_counts.mtx")
+
+# cellnames_list.txt
+cell.names.young <- colnames(counts.young)
+cell.names.aged <- colnames(counts.aged)
+
+write.genelist.fun(cell.names.young, filename = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/DTW/Branch2_target_genes_subset_entireBranch2_Myod/Branch2_young_biggest_difference_subset_cellname_list.txt", paste = 0)
+write.genelist.fun(cell.names.aged, filename = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/DTW/Branch2_target_genes_subset_entireBranch2_Myod/Branch2_aged_biggest_difference_subset_cellname_list.txt", paste = 0)
+```
+
+#### Myod target genes (entire Branch1)
+```{r}
+# pseudotime.df
+pseudotime.df.young <- data.frame(cells = rownames(colData(cds.branch1.young)),
+                                  pseudotime = pseudotime(cds.branch1.young)
+pseudotime.df.aged <- data.frame(cells = rownames(colData(cds.branch1.aged)),
+                                  pseudotime = pseudotime(cds.branch1.aged))
+
+write.csv(pseudotime.df.young, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/DTW/Branch1_target_genes_subset_entireBranch1_Myod/Branch1_whole_young_target_genes_subset_Myod_pseudotime.csv")
+write.csv(pseudotime.df.aged, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/DTW/Branch1_target_genes_subset_entireBranch1_Myod/Branch1_whole_aged_target_genes_subset_Myod_pseudotime.csv")
+
+# counts.mtx
+counts.young <- counts(cds.branch1.young)
+counts.aged <- counts(cds.branch1.aged)
+
+counts.young.subset <- counts.young[which(rownames(counts.young) %in% branch1_Trust_TFs$`MYOD1 mouse`),]
+counts.aged.subset <- counts.aged[which(rownames(counts.aged) %in% branch1_Trust_TFs$`MYOD1 mouse`),]
+
+writeMM(counts.young.subset, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/DTW/Branch1_target_genes_subset_entireBranch1_Myod/Branch1_whole_young_target_genes_subset_Myod_counts.mtx")
+writeMM(counts.aged.subset, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/DTW/Branch1_target_genes_subset_entireBranch1_Myod/Branch1_whole_aged_target_genes_subset_Myod_counts.mtx")
+
+# cellnames_list.txt
+cell.names.young <- colnames(counts.young)
+cell.names.aged <- colnames(counts.aged)
+
+write.genelist.fun(cell.names.young, filename = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/DTW/Branch1_target_genes_subset_entireBranch1_Myod/Branch1_young_biggest_difference_subset_cellname_list.txt", paste = 0)
+write.genelist.fun(cell.names.aged, filename = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/DTW/Branch1_target_genes_subset_entireBranch1_Myod/Branch1_aged_biggest_difference_subset_cellname_list.txt", paste = 0)
+```
+
+#### Whole Branch1
+```{r}
+dir <- "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/Branch1_whole/"
+
+
+pseudotime.df.young <- data.frame(cells = rownames(colData(cds.branch1.young)),
+                                  pseudotime = pseudotime(cds.branch1.young))
+pseudotime.df.aged <- data.frame(cells = rownames(colData(cds.branch1.aged)),
+                                  pseudotime = pseudotime(cds.branch1.aged))
+
+write.csv(pseudotime.df.young, file = paste(dir, "Branch1_young_pseudotime.csv", sep = ""))
+write.csv(pseudotime.df.aged, file = paste(dir, "Branch1_aged_pseudotime.csv", sep = ""))
+
+# counts.mtx
+counts.young <- counts(cds.branch1.young)
+counts.aged <- counts(cds.branch1.aged)
+
+writeMM(counts.young,  file = paste(dir, 'Branch1_young_counts.mtx', sep = ""))
+writeMM(counts.aged, file = paste(dir, 'Branch1_aged_counts.mtx', sep = ""))
+
+# cellnames_list.txt
+cell.names.young <- colnames(counts.young)
+cell.names.aged <- colnames(counts.aged)
+
+write.genelist.fun(cell.names.young, filename = paste(dir, 'Branch1_young_cellname_list.txt'),  paste = 0)
+write.genelist.fun(cell.names.aged,  filename = paste(dir,  'Branch1_aged_cellname_list.txt'), paste = 0)
+```
+
+# DTW outputs
+```{r}
+dtw.dir <- '~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/'
+```
+
+## Branch1_target_genes_subset_entireBranch1_Myod_DTW_OUT1
+```{r}
+dtw.branch1.myod.targets.cosine <- read.delim(file  =paste(dtw.dir, 'Branch1_target_genes_subset_entireBranch1_Myod_DTW_OUT/Branch1_target_genes_subset_entireBranch1_Myod_DTW_OUT_cosine.txt', sep = ""), skip = 2)
+dtw.branch1.myod.targets.cosine <- dtw.branch1.myod.targets.cosine[-1,]
+
+dtw.branch1.myod.targets.cosine.diff <- cbind(dtw.branch1.myod.targets.cosine, data.frame(time = seq(1:nrow(dtw.branch1.myod.targets.cosine)),
+                              difference = dtw.branch1.myod.targets.cosine$Y_pt - dtw.branch1.myod.targets.cosine$A_pt))
+
+ggplot(dtw.branch1.myod.targets.cosine.diff) + geom_line(aes(x = time, y = difference), size = 1)  + theme_classic() 
+
+
+coef(lm(dtw.branch1.myod.targets.cosine.diff$A_pt ~ dtw.branch1.myod.targets.cosine.diff$Y_pt))
+ggplot(dtw.branch1.myod.targets.cosine.diff, aes(x = Y_pt, y = A_pt)) + geom_line(size = 2) + theme_classic() + geom_abline(intercept = 0, slope = 0.6003819  , color = 'red') + geom_vline(xintercept = c(0, 20, 40, 60), color = 'blue') + ggtitle("Cosine", )+ ggtitle("Cosine") +  theme(plot.title = element_text(size = 30, face = "bold"))
+```
+
+```{r}
+dtw.branch1.myod.targets.euclidean <- read.delim(file  =paste(dtw.dir, 'Branch1_target_genes_subset_entireBranch1_Myod_DTW_OUT/Branch1_target_genes_subset_entireBranch1_Myod_DTW_OUT_euclidean.txt', sep = ""), skip = 2)
+dtw.branch1.myod.targets.euclidean <- dtw.branch1.myod.targets.euclidean[-1,]
+
+dtw.branch1.myod.targets.euclidean.diff <- cbind(dtw.branch1.myod.targets.euclidean, data.frame(time = seq(1:nrow(dtw.branch1.myod.targets.euclidean)),
+                              difference = dtw.branch1.myod.targets.euclidean$Y_pt - dtw.branch1.myod.targets.euclidean$A_pt))
+
+ggplot(dtw.branch1.myod.targets.euclidean.diff) + geom_line(aes(x = time, y = difference), size = 1)  + theme_classic() 
+
+
+coef(lm(dtw.branch1.myod.targets.euclidean.diff$A_pt ~ dtw.branch1.myod.targets.euclidean.diff$Y_pt))
+
+ggplot(dtw.branch1.myod.targets.euclidean.diff, aes(x = Y_pt, y = A_pt)) + geom_line(size = 2) + theme_classic() + geom_abline(intercept = 0, slope = 0.6003819  , color = 'red') + geom_vline(xintercept = c(0, 20, 40, 60), color = 'blue') + ggtitle("Myod1_Branch1_Euclidean") +  theme(plot.title = element_text(size = 30, face = "bold"))
+
+ggplot(dtw.branch1.myod.targets.euclidean.diff, aes(x = Y_pt, y = A_pt)) + geom_point(aes(fill = difference, color = difference), size = 5) + theme_classic() + geom_abline(intercept = 0, slope = max(dtw.branch1.myod.targets.euclidean.diff$A_pt)/max(dtw.branch1.myod.targets.euclidean.diff$Y_pt)  , color = 'red') + geom_vline(xintercept = c(0, 20, 40, 60), color = 'blue', linetype = 'dashed')+ ggtitle("Myod1_Branch1_Euclidean") +  theme(plot.title = element_text(size = 30, face = "bold"))
+```
+## Branch2_myonuclear_subset1
+```{r}
+dtw.branch2.myonuclear.subset2 <- read.delim(file  = paste(dtw.dir, 'Branch2_myonuclear_subset2/Branch2_myonuclear_subset2_DTW_OUTPUT_euclidean.out', sep = ""), skip = 2)
+dtw.branch2.myonuclear.subset2 <- dtw.branch2.myonuclear.subset2[-1,]
+
+dtw.obj <- dtw.branch2.myonuclear.subset2
+
+dtw.obj <- cbind(dtw.obj, data.frame(time = seq(1:nrow(dtw.obj)),
+                              difference = dtw.obj$Y_pt - dtw.obj$A_pt))
+
+ggplot(dtw.obj) + geom_line(aes(x = time, y = difference), size = 1)  + theme_classic() 
+
+coef(lm(dtw.obj$A_pt ~ dtw.obj$Y_pt))
+
+
+ggplot(dtw.obj, aes(x = Y_pt, y = A_pt)) +geom_point(aes(fill = difference, color = difference), size = 5)  + theme_classic() + geom_abline(intercept = 0, 
+                                                                                                                            slope = max(dtw.obj$A_pt)/max(dtw.obj$Y_pt), color = 'red') + 
+  geom_vline(xintercept = c(0, 10, 20, 30, 40), color = 'blue') + 
+  ggtitle("myonuclear_subset") + 
+  theme(plot.title = element_text(size = 30, face = "bold"))
+```
+## Branch2_myonuclear_subset2
+```{r}
+dtw.branch2.myonuclear.subset <- read.delim(file  = paste(dtw.dir, 'Branch2_myonuclear_subset2/Branch2_myonuclear_subset2_DTW_OUTPUT_euclidean.out', sep = ""), skip = 2)
+dtw.branch2.myonuclear.subset <- dtw.branch2.myonuclear.subset[-1,]
+
+dtw.obj <- dtw.branch2.myonuclear.subset
+
+dtw.obj <- cbind(dtw.obj, data.frame(time = seq(1:nrow(dtw.obj)),
+                              difference = dtw.obj$Y_pt - dtw.obj$A_pt))
+
+ggplot(dtw.obj) + geom_line(aes(x = time, y = difference), size = 1)  + theme_classic() 
+
+coef(lm(dtw.obj$A_pt ~ dtw.obj$Y_pt))
+
+
+ggplot(dtw.obj, aes(x = Y_pt, y = A_pt)) +geom_point(aes(fill = difference, color = difference), size = 5)  + theme_classic() + geom_abline(intercept = 0, 
+                                                                                                                            slope = max(dtw.obj$A_pt)/max(dtw.obj$Y_pt), color = 'red') + 
+  geom_vline(xintercept = c(0, 10, 20, 30, 40), color = 'blue') + 
+  ggtitle("myonuclear_subset") + 
+  theme(plot.title = element_text(size = 30, face = "bold"))
+```
+
+## Branch2_myod_targets
+```{r}
+dtw.obj <- read.delim(file  = paste(dtw.dir, '/Branch2_target_genes_subset_entireBranch2_Myod_DTW_OUTPUT_euclidean.out', sep = ""), skip = 2)
+dtw.obj <- dtw.obj[-1,]
+
+#dtw.obj <- dtw.branch2.myonuclear.subset
+
+dtw.obj <- cbind(dtw.obj, data.frame(time = seq(1:nrow(dtw.obj)),
+                              difference = dtw.obj$Y_pt - dtw.obj$A_pt))
+
+ggplot(dtw.obj) + geom_line(aes(x = time, y = difference), size = 1)  + theme_classic() 
+
+coef(lm(dtw.obj$A_pt ~ dtw.obj$Y_pt))
+
+
+ggplot(dtw.obj, aes(x = Y_pt, y = A_pt)) +geom_point(aes(fill = difference, color = difference), size = 5)  + theme_classic() + geom_abline(intercept = 0, 
+                                                                                                                            slope = max(dtw.obj$A_pt)/max(dtw.obj$Y_pt), color = 'red') + 
+  geom_vline(xintercept = c(0, 20, 40, 60, 80), color = 'blue') + 
+  ggtitle("branch2_myod_targets") + 
+  theme(plot.title = element_text(size = 30, face = "bold"))
+```
+## Branch1_2_combined
+```{r}
+dtw.obj <- read.delim(file  = paste(dtw.dir, 'Branch1_Branch2_combined/Branch1_Branch2_combined_DTW_OUTPUT_euclidean.out', sep = ""), skip = 2)
+dtw.obj <- dtw.obj[-1,]
+# distance 2675113.0173583874
+
+dtw.obj <- cbind(dtw.obj, data.frame(time = seq(1:nrow(dtw.obj)),
+                              difference = dtw.obj$Y_pt - dtw.obj$A_pt))
+
+ggplot(dtw.obj) + geom_line(aes(x = time, y = difference), size = 1)  + theme_classic()  + geom_hline(yintercept = 0)
+
+#coef(lm(dtw.obj$A_pt ~ dtw.obj$Y_pt))
+
+dtw.obj <- cbind(dtw.obj, 
+      Y_pt.norm = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt )),
+      A_pt.norm = c(dtw.obj$A_pt / max(dtw.obj$A_pt )), 
+      norm.dff = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt ) - c(dtw.obj$A_pt / max(dtw.obj$A_pt ))))
+
+ggplot(dtw.obj, aes(x = Y_pt.norm , y = A_pt.norm)) +geom_point(aes(fill = difference, color = difference), size = 5)  + theme_classic() + geom_abline(intercept = 0, 
+                                                                                                                            slope = 1, color = 'red') + 
+  geom_vline(xintercept = c(0, .20, .40, .60, .80, 1), color = 'blue') +  
+  ggtitle("Branch1_Branch2")+
+  theme(plot.title = element_text(size = 20, face = "bold")) 
+
+    ggplot(dtw.obj, aes(x = Y_pt.norm , y = A_pt.norm)) +
+    geom_point(aes( color = as.numeric(norm.dff)), size = 5)  + 
+    scale_colour_gradient2(mid = 'gray') + 
+    #scale_colour_gradient2(colours = terrain.colors(10), midpoint = 0 ) + 
+    #scale_colour_gradientn(colours = 'viridis') + 
+    theme_classic() + 
+    geom_abline(intercept = 0, slope = 1, color = 'red') + 
+    geom_vline(xintercept = c(0, .20, .40, .60, .80, 1), color = 'blue') +  
+    ggtitle("Branch1_Branch2_normalized") +
+    theme(plot.title = element_text(size = 20, face = "bold"))
+  
+  ggplot(dtw.obj, aes(x = Y_pt.norm , y = A_pt.norm)) +
+    geom_point(aes( color = as.numeric(norm.dff)), size = 5)  + 
+    #scale_colour_gradient2(mid = 'gray') + 
+    scale_colour_gradientn(colours = terrain.colors(10) ) + 
+    #scale_colour_gradientn(colours = 'viridis') + 
+    theme_classic() + 
+    geom_abline(intercept = 0, slope = 1, color = 'red') + 
+    geom_vline(xintercept = c(0, .20, .40, .60, .80, 1), color = 'blue') +  
+    ggtitle("Branch1_Branch2_normalized") +
+    theme(plot.title = element_text(size = 20, face = "bold"))
+```
+
+### Branch2
+## Branch2
+```{r}
+dtw.obj <- read.delim(file  = paste(dtw.dir, 'DTW_OUTPUT_NOT_SUBSAMP_BRANCH2.txt', sep = ""), skip = 2)
+dtw.obj <- dtw.obj[-1,]
+# distance 1969432.4691863959
+
+dtw.obj <- cbind(dtw.obj, data.frame(time = seq(1:nrow(dtw.obj)),
+                              difference = dtw.obj$Y_pt - dtw.obj$A_pt))
+
+ggplot(dtw.obj) + geom_line(aes(x = time, y = difference), size = 1)  + theme_classic()  + geom_hline(yintercept = 0)
+
+#coef(lm(dtw.obj$A_pt ~ dtw.obj$Y_pt))
+
+dtw.obj <- cbind(dtw.obj, 
+      Y_pt.norm = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt )),
+      A_pt.norm = c(dtw.obj$A_pt / max(dtw.obj$A_pt )), 
+      norm.dff = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt ) - c(dtw.obj$A_pt / max(dtw.obj$A_pt ))))
+
+ggplot(dtw.obj, aes(x = Y_pt.norm , y = A_pt.norm)) +geom_point(aes(fill = difference, color = difference), size = 5)  + theme_classic() + geom_abline(intercept = 0, 
+                                                                                                                            slope = 1, color = 'red') + 
+  geom_vline(xintercept = c(0, .20, .40, .60, .80, 1), color = 'blue') +  
+  ggtitle("Branch2")+
+  theme(plot.title = element_text(size = 20, face = "bold")) 
+  
+ ggplot(dtw.obj, aes(x = Y_pt , y = A_pt)) +
+    geom_point(aes(fill = difference, color = difference), size = 5)  + theme_classic() + geom_abline(intercept = 0, slope = max(dtw.obj$A_pt)/max(dtw.obj$Y_pt), color = 'red') + 
+  geom_vline(xintercept = c(0, 20, 40, 60, 80, 100), color = 'blue') +  
+  ggtitle("Branch2") +
+  theme(plot.title = element_text(size = 20, face = "bold"))
+
+ ggplot(dtw.obj, aes(x = Y_pt.norm , y = A_pt.norm)) +
+    geom_point(aes(fill = as.numeric(norm.dff), color = as.numeric(norm.dff)), size = 5)  + theme_classic() + geom_abline(intercept = 0, slope = 1, color = 'red') + 
+  geom_vline(xintercept = c(0, .20, .40, .60, .80, 1), color = 'blue') +  
+  ggtitle("Branch2_normalized") +
+  theme(plot.title = element_text(size = 20, face = "bold"))
+  
+    ggplot(dtw.obj, aes(x = Y_pt.norm , y = A_pt.norm)) +
+    geom_point(aes( color = as.numeric(norm.dff)), size = 5)  + 
+    scale_colour_gradient2(mid = 'gray') + 
+    #scale_colour_gradient2(colours = terrain.colors(10), midpoint = 0 ) + 
+    #scale_colour_gradientn(colours = 'viridis') + 
+    theme_classic() + 
+    geom_abline(intercept = 0, slope = 1, color = 'red') + 
+    geom_vline(xintercept = c(0, .20, .40, .60, .80, 1), color = 'blue') +  
+    ggtitle("Branch1_Branch2_normalized") +
+    theme(plot.title = element_text(size = 20, face = "bold"))
+    
+      ggplot(dtw.obj, aes(x = Y_pt.norm , y = A_pt.norm)) +
+    geom_point(aes( color = as.numeric(norm.dff)), size = 5)  + 
+    #scale_colour_gradient2(mid = 'gray') + 
+    scale_colour_gradientn(colours = terrain.colors(10) ) + 
+    #scale_colour_gradientn(colours = 'viridis') + 
+    theme_classic() + 
+    geom_abline(intercept = 0, slope = 1, color = 'red') + 
+    geom_vline(xintercept = c(0, .20, .40, .60, .80, 1), color = 'blue') +  
+    ggtitle("Branch1_Branch2_normalized") +
+    theme(plot.title = element_text(size = 20, face = "bold"))
+```
+
+## Branch1
+```{r}
+dtw.obj <- read.delim(file  = paste(dtw.dir, 'Branch1_whole/Branch1_whole_DTW_OUTPUT_euclidean.out', sep = ""), skip = 2)
+dtw.obj <- dtw.obj[-1,]
+# distance 1969432.4691863959
+title = 'Branch1?'
+dtw.obj <- cbind(dtw.obj, data.frame(time = seq(1:nrow(dtw.obj)),
+                              difference = dtw.obj$Y_pt - dtw.obj$A_pt))
+
+ggplot(dtw.obj) + geom_line(aes(x = time, y = difference), size = 1)  + theme_classic()  + geom_hline(yintercept = 0)
+
+#coef(lm(dtw.obj$A_pt ~ dtw.obj$Y_pt))
+
+dtw.obj <- cbind(dtw.obj, 
+      Y_pt.norm = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt )),
+      A_pt.norm = c(dtw.obj$A_pt / max(dtw.obj$A_pt )), 
+      norm.dff = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt ) - c(dtw.obj$A_pt / max(dtw.obj$A_pt ))))
+
+ggplot(dtw.obj, aes(x = Y_pt.norm , y = A_pt.norm)) +geom_point(aes(fill = difference, color = difference), size = 5)  + theme_classic() + geom_abline(intercept = 0, 
+                                                                                                                            slope = 1, color = 'red') + 
+  geom_vline(xintercept = c(0, .20, .40, .60, .80, 1), color = 'blue') +  
+  ggtitle(title)+
+  theme(plot.title = element_text(size = 20, face = "bold")) 
+  
+  ggplot(dtw.obj, aes(x = Y_pt.norm , y = A_pt.norm)) +
+    geom_point(aes(fill = as.numeric(norm.dff), color = as.numeric(norm.dff)), size = 5)  + theme_classic() + geom_abline(intercept = 0, slope = 1, color = 'red') + 
+  geom_vline(xintercept = c(0, .20, .40, .60, .80, 1), color = 'blue') +  
+  ggtitle(title) +
+  theme(plot.title = element_text(size = 20, face = "bold"))
+  
+     ggplot(dtw.obj, aes(x = Y_pt.norm , y = A_pt.norm)) +
+    geom_point(aes( color = as.numeric(norm.dff)), size = 5)  + 
+    scale_colour_gradient2(low = muted("red"), mid = "azure3", high = "blue4") + 
+    theme_classic() + 
+    geom_abline(intercept = 0, slope = 1, color = 'red') + 
+    geom_vline(xintercept = c(0, .20, .40, .60, .80, 1), color = 'blue') +  
+    ggtitle(title) +
+    theme(plot.title = element_text(size = 20, face = "bold"))
+    
+      ggplot(dtw.obj, aes(x = Y_pt.norm , y = A_pt.norm)) +
+    geom_point(aes( color = as.numeric(norm.dff)), size = 5)  + 
+    scale_colour_gradientn(colours = terrain.colors(10) ) + 
+    theme_classic() + 
+    geom_abline(intercept = 0, slope = 1, color = 'red') + 
+    geom_vline(xintercept = c(0, .20, .40, .60, .80, 1), color = 'blue') +  
+    ggtitle(title) +
+    theme(plot.title = element_text(size = 20, face = "bold"))
+```
+
+```{r}
+dtw.obj <- read.delim(file  = '~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/drive-download-20220419T152043Z-001/Branch1_Branch2_combined_trajectory_subsample1/Branch1_Branch2_combined_trajectory_subsample1_DTW.out', skip = 2)
+dtw.obj <- dtw.obj[-1,]
+# distance 1969432.4691863959
+title = 'Branch1?'
+dtw.obj <- cbind(dtw.obj, data.frame(time = seq(1:nrow(dtw.obj)),
+                              difference = dtw.obj$Y_pt - dtw.obj$A_pt))
+
+ggplot(dtw.obj) + geom_line(aes(x = time, y = difference), size = 1)  + theme_classic()  + geom_hline(yintercept = 0)
+
+#coef(lm(dtw.obj$A_pt ~ dtw.obj$Y_pt))
+
+dtw.obj <- cbind(dtw.obj, 
+      Y_pt.norm = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt )),
+      A_pt.norm = c(dtw.obj$A_pt / max(dtw.obj$A_pt )), 
+      norm.dff = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt ) - c(dtw.obj$A_pt / max(dtw.obj$A_pt ))))
+
+ggplot(dtw.obj, aes(x = Y_pt.norm , y = A_pt.norm)) +geom_point(aes(fill = difference, color = difference), size = 5)  + theme_classic() + geom_abline(intercept = 0, 
+                                                                                                                            slope = 1, color = 'red') + 
+  geom_vline(xintercept = c(0, .20, .40, .60, .80, 1), color = 'blue') +  
+  ggtitle(title)+
+  theme(plot.title = element_text(size = 20, face = "bold")) 
+  
+  ggplot(dtw.obj, aes(x = Y_pt.norm , y = A_pt.norm)) +
+    geom_point(aes(fill = as.numeric(norm.dff), color = as.numeric(norm.dff)), size = 5)  + theme_classic() + geom_abline(intercept = 0, slope = 1, color = 'red') + 
+  geom_vline(xintercept = c(0, .20, .40, .60, .80, 1), color = 'blue') +  
+  ggtitle(title) +
+  theme(plot.title = element_text(size = 20, face = "bold"))
+  
+     ggplot(dtw.obj, aes(x = Y_pt.norm , y = A_pt.norm)) +
+    geom_point(aes( color = as.numeric(norm.dff)), size = 5)  + 
+    scale_colour_gradient2(low = muted("red"), mid = "azure3", high = "blue4") + 
+    theme_classic() + 
+    geom_abline(intercept = 0, slope = 1, color = 'red') + 
+    geom_vline(xintercept = c(0, .20, .40, .60, .80, 1), color = 'blue') +  
+    ggtitle(title) +
+    theme(plot.title = element_text(size = 20, face = "bold"))
+    
+      ggplot(dtw.obj, aes(x = Y_pt.norm , y = A_pt.norm)) +
+    geom_point(aes( color = as.numeric(norm.dff)), size = 5)  + 
+    scale_colour_gradientn(colours = terrain.colors(10) ) + 
+    theme_classic() + 
+    geom_abline(intercept = 0, slope = 1, color = 'red') + 
+    geom_vline(xintercept = c(0, .20, .40, .60, .80, 1), color = 'blue') +  
+    ggtitle(title) +
+    theme(plot.title = element_text(size = 20, face = "bold"))
+```
+
+### FULL BRANCH COMBINED 10x subsamples
+```{r}
+dir <- "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/drive-download-20220419T152043Z-001/"
+#setwd(dir)
+
+for (i in 1:length(list.files()))
+#for (i in 1:2)
+{
+  
+  #new.dir <- paste(list.files(include.dirs = T, path = dir)[i], '/', list.files()[i], '_DTW.out', sep = "")
+  
+  dtw.obj <- read.delim(file  = paste(dir, list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/drive-download-20220419T152043Z-001/")[i], '/', 
+                                      list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/drive-download-20220419T152043Z-001/")[i], '_DTW.out', sep = ""), skip = 2)
+
+
+  dtw.obj <- dtw.obj[-1,]
+
+  title =  strsplit(list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/drive-download-20220419T152043Z-001/")[i], split = 'trajectory_')[[1]][2]
+  dtw.obj <- cbind(dtw.obj, data.frame(time = seq(1:nrow(dtw.obj)),
+                                difference = dtw.obj$Y_pt - dtw.obj$A_pt))
+  
+  # print(ggplot(dtw.obj) + geom_line(aes(x = time, y = difference), size = 1)  + theme_classic()  + geom_hline(yintercept = 0))
+  
+
+  dtw.obj <- cbind(dtw.obj, 
+        Y_pt.norm = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt )),
+        A_pt.norm = c(dtw.obj$A_pt / max(dtw.obj$A_pt )), 
+        norm.dff = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt ) - c(dtw.obj$A_pt / max(dtw.obj$A_pt ))))
+  
+  # print(ggplot(dtw.obj, aes(x = Y_pt , y = A_pt)) +geom_point(aes(fill = difference, color = difference), size = 5)  + theme_classic() + geom_abline(intercept = 0, slope = 1, color = 'red') + 
+  #   geom_vline(xintercept = c(0, .20, .40, .60, .80, 1), color = 'blue') +  
+  #   ggtitle(title)+
+  #   theme(plot.title = element_text(size = 20, face = "bold")) )
+    
+       print(ggplot(dtw.obj, aes(x = Y_pt.norm , y = A_pt.norm)) +
+      geom_point(aes( color = as.numeric(norm.dff)), size = 2)  + 
+      scale_colour_gradient2(low = muted("red"), mid = "azure3", high = "blue4") + 
+      theme_classic() + 
+      geom_abline(intercept = 0, slope = 1, color = 'red') + 
+      geom_vline(xintercept = c(0, .20, .40, .60, .80, 1), color = 'blue') +  
+      ggtitle(title) +
+      theme(plot.title = element_text(size = 20, face = "bold")))
+       
+}
+```
+
+### FULL BRANCH COMBINED 10x subsamples
+```{r}
+dir <- "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/drive-download-20220419T152043Z-001/"
+#setwd(dir)
+
+for (i in 1:length(list.files()))
+#for (i in 1:2)
+{
+  
+  #new.dir <- paste(list.files(include.dirs = T, path = dir)[i], '/', list.files()[i], '_DTW.out', sep = "")
+  
+  dtw.obj <- read.delim(file  = paste(dir, list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/drive-download-20220419T152043Z-001/")[i], '/', 
+                                      list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/drive-download-20220419T152043Z-001/")[i], '_DTW.out', sep = ""), skip = 2)
+
+
+  dtw.obj <- dtw.obj[-1,]
+
+  title =  strsplit(list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/drive-download-20220419T152043Z-001/")[i], split = 'trajectory_')[[1]][2]
+  dtw.obj <- cbind(dtw.obj, data.frame(time = seq(1:nrow(dtw.obj)),
+                                difference = dtw.obj$Y_pt - dtw.obj$A_pt))
+  
+  dtw.obj <- cbind(dtw.obj, 
+        Y_pt.norm = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt )),
+        A_pt.norm = c(dtw.obj$A_pt / max(dtw.obj$A_pt )), 
+        norm.dff = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt ) - c(dtw.obj$A_pt / max(dtw.obj$A_pt ))))
+  
+  print(ggplot(dtw.obj, aes(x = Y_pt , y = A_pt)) +geom_point(aes(fill = difference, color = difference), size = 2)  + theme_classic() + geom_abline(intercept = 0,  slope = max(dtw.obj$A_pt)/max(dtw.obj$Y_pt), color = 'red') +
+    #geom_vline(xintercept = c(0, 20, 40, 60, 80, 100, 120, 140, 160), color = 'blue', linetype = 'dashed') +
+       geom_vline(xintercept = dtw.obj$Y_pt[which(dtw.obj$Y_pt > 50 & dtw.obj$Y_pt < 53)][1], color = 'red', linetype = 'dashed') + 
+          geom_vline(xintercept = dtw.obj$Y_pt[which(dtw.obj$Y_pt > 60 & dtw.obj$Y_pt < 63)][1], color = 'red', linetype = 'dashed') +
+             geom_hline(yintercept = dtw.obj$A_pt[which(dtw.obj$Y_pt > 50 & dtw.obj$Y_pt < 53)][1], color = 'blue', linetype = 'dashed') + 
+          geom_hline(yintercept = dtw.obj$A_pt[which(dtw.obj$Y_pt > 60 & dtw.obj$Y_pt < 63)][1], color = 'blue', linetype = 'dashed') +
+    ggtitle(title)+
+    theme(plot.title = element_text(size = 20, face = "bold")) )
+    
+       
+}
+```
+
+```{r}
+sort(as.vector(updated.seurat$pseudotime[which(updated.seurat$branch.path == 'both')]))
+```
+
+```{r}
+dir <- "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/drive-download-20220419T152043Z-001/"
+#setwd(dir)
+
+for (i in 1:length(list.files()))
+{
+  
+  #new.dir <- paste(list.files(include.dirs = T, path = dir)[i], '/', list.files()[i], '_DTW.out', sep = "")
+  
+  dtw.obj <- read.delim(file  = paste(dir, list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/drive-download-20220419T152043Z-001/")[i], '/', 
+                                      list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/drive-download-20220419T152043Z-001/")[i], '_DTW.out', sep = ""), skip = 2)
+
+
+  dtw.obj <- dtw.obj[-1,]
+
+  title =  strsplit(list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/drive-download-20220419T152043Z-001/")[i], split = 'trajectory_')[[1]][2]
+  dtw.obj <- cbind(dtw.obj, data.frame(time = seq(1:nrow(dtw.obj)),
+                                difference = dtw.obj$Y_pt - dtw.obj$A_pt))
+  
+  print(ggplot(dtw.obj) + geom_line(aes(x = time, y = difference), size = 1)  + theme_classic()  + 
+          geom_hline(yintercept = 0) + 
+          geom_vline(xintercept = dtw.obj$time[which(dtw.obj$Y_pt > 50 & dtw.obj$Y_pt < 53)][1], color = 'red') + 
+          geom_vline(xintercept = dtw.obj$time[which(dtw.obj$Y_pt > 60 & dtw.obj$Y_pt < 63)][1], color = 'red')) 
+}
+```
+
+### FULL DTW --- branch2 subset
+```{r}
+dir <- "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/drive-download-20220419T152043Z-001/"
+#setwd(dir)
+
+for (i in 1:length(list.files()))
+#for (i in 1:2)
+{
+  
+  #new.dir <- paste(list.files(include.dirs = T, path = dir)[i], '/', list.files()[i], '_DTW.out', sep = "")
+  
+  dtw.obj <- read.delim(file  = paste(dir, list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/drive-download-20220419T152043Z-001/")[i], '/', 
+                                      list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/drive-download-20220419T152043Z-001/")[i], '_DTW.out', sep = ""), skip = 2)
+
+  dtw.obj <- dtw.obj[-1,]
+
+  title =  strsplit(list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/drive-download-20220419T152043Z-001/")[i], split = 'trajectory_')[[1]][2]
+  dtw.obj <- cbind(dtw.obj, data.frame(time = seq(1:nrow(dtw.obj)),
+                                difference = dtw.obj$Y_pt - dtw.obj$A_pt))
+  
+  # print(ggplot(dtw.obj) + geom_line(aes(x = time, y = difference), size = 1)  + theme_classic()  + geom_hline(yintercept = 0))
+  
+
+  dtw.obj <- cbind(dtw.obj, 
+        Y_pt.norm = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt )),
+        A_pt.norm = c(dtw.obj$A_pt / max(dtw.obj$A_pt )), 
+        norm.dff = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt ) - c(dtw.obj$A_pt / max(dtw.obj$A_pt ))))
+  
+  dtw.obj <- dtw.obj[which(dtw.obj$Y_pt > 55),]
+  
+  # print(ggplot(dtw.obj, aes(x = Y_pt , y = A_pt)) +geom_point(aes(fill = difference, color = difference), size = 5)  + theme_classic() + geom_abline(intercept = 0, slope = 1, color = 'red') + 
+  #   geom_vline(xintercept = c(0, .20, .40, .60, .80, 1), color = 'blue') +  
+  #   ggtitle(title)+
+  #   theme(plot.title = element_text(size = 20, face = "bold")) )
+    
+       print(ggplot(dtw.obj, aes(x = Y_pt.norm , y = A_pt.norm)) +
+      geom_point(aes( color = as.numeric(norm.dff)), size = 2)  + 
+      scale_colour_gradient2(low = muted("red"), mid = "azure3", high = "blue4") + 
+      theme_classic() + 
+      geom_abline(intercept = 0, slope = 1, color = 'red') + 
+      #geom_vline(xintercept = c(0, .20, .40, .60, .80, 1), color = 'blue') +  
+      ggtitle(title) +
+      theme(plot.title = element_text(size = 20, face = "bold")))
+       
+}
+```
+### FULL DTW --- branch1 subset
+```{r}
+dir <- "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/drive-download-20220419T152043Z-001/"
+#setwd(dir)
+
+for (i in 1:length(list.files()))
+#for (i in 1:2)
+{
+  
+  #new.dir <- paste(list.files(include.dirs = T, path = dir)[i], '/', list.files()[i], '_DTW.out', sep = "")
+  
+  dtw.obj <- read.delim(file  = paste(dir, list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/drive-download-20220419T152043Z-001/")[i], '/', 
+                                      list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/drive-download-20220419T152043Z-001/")[i], '_DTW.out', sep = ""), skip = 2)
+
+  dtw.obj <- dtw.obj[-1,]
+
+  title =  strsplit(list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/drive-download-20220419T152043Z-001/")[i], split = 'trajectory_')[[1]][2]
+  dtw.obj <- cbind(dtw.obj, data.frame(time = seq(1:nrow(dtw.obj)),
+                                difference = dtw.obj$Y_pt - dtw.obj$A_pt))
+  
+  # print(ggplot(dtw.obj) + geom_line(aes(x = time, y = difference), size = 1)  + theme_classic()  + geom_hline(yintercept = 0))
+  
+
+  dtw.obj <- cbind(dtw.obj, 
+        Y_pt.norm = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt )),
+        A_pt.norm = c(dtw.obj$A_pt / max(dtw.obj$A_pt )), 
+        norm.dff = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt ) - c(dtw.obj$A_pt / max(dtw.obj$A_pt ))))
+  
+  dtw.obj <- dtw.obj[which(dtw.obj$Y_pt < 55),]
+  
+  # print(ggplot(dtw.obj, aes(x = Y_pt , y = A_pt)) +geom_point(aes(fill = difference, color = difference), size = 5)  + theme_classic() + geom_abline(intercept = 0, slope = 1, color = 'red') + 
+  #   geom_vline(xintercept = c(0, .20, .40, .60, .80, 1), color = 'blue') +  
+  #   ggtitle(title)+
+  #   theme(plot.title = element_text(size = 20, face = "bold")) )
+    
+       print(ggplot(dtw.obj, aes(x = Y_pt.norm , y = A_pt.norm)) +
+      geom_point(aes( color = as.numeric(norm.dff)), size = 2)  + 
+      scale_colour_gradient2(low = muted("red"), mid = "azure3", high = "blue4") + 
+      theme_classic() + 
+      geom_abline(intercept = 0, slope = 1, color = 'red') + 
+      #geom_vline(xintercept = c(0, .20, .40, .60, .80, 1), color = 'blue') +  
+      ggtitle(title) +
+      theme(plot.title = element_text(size = 20, face = "bold")))
+       
+}
+```
+
+### plotting all on top of each other
+```{r}
+dir <- "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/drive-download-20220419T152043Z-001/"
+#setwd(dir)
+
+for (i in 1:length(list.files()))
+#for (i in 1:2)
+{
+  
+  #new.dir <- paste(list.files(include.dirs = T, path = dir)[i], '/', list.files()[i], '_DTW.out', sep = "")
+  
+  dtw.obj <- read.delim(file  = paste(dir, list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/drive-download-20220419T152043Z-001/")[i], '/', 
+                                      list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/drive-download-20220419T152043Z-001/")[i], '_DTW.out', sep = ""), skip = 2)
+
+  dtw.obj <- dtw.obj[-1,]
+
+  title =  strsplit(list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/drive-download-20220419T152043Z-001/")[i], split = 'trajectory_')[[1]][2]
+  dtw.obj <- cbind(dtw.obj, data.frame(time = seq(1:nrow(dtw.obj)),
+                                difference = dtw.obj$Y_pt - dtw.obj$A_pt))
+  
+  # print(ggplot(dtw.obj) + geom_line(aes(x = time, y = difference), size = 1)  + theme_classic()  + geom_hline(yintercept = 0))
+  
+
+  dtw.obj <- cbind(dtw.obj, 
+        Y_pt.norm = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt )),
+        A_pt.norm = c(dtw.obj$A_pt / max(dtw.obj$A_pt )), 
+        norm.dff = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt ) - c(dtw.obj$A_pt / max(dtw.obj$A_pt ))),
+        subsample = i)
+  
+
+  dtw.obj.combined <- rbind(dtw.obj.combined, dtw.obj) 
+
+       print(ggplot() +
+      geom_line(data = dtw.obj.combined, aes(x = Y_pt, y = A_pt, color = as.factor(subsample)), size = 1, alpha = 0.8)  + 
+
+      geom_line(size = 2)  +
+      #scale_colour_gradient2(low = muted("red"), mid = "azure3", high = "blue4") +
+      theme_classic() +
+               geom_vline(xintercept = dtw.obj$Y_pt[which(dtw.obj$Y_pt > 50 & dtw.obj$Y_pt < 53)][1], color = 'red', linetype = 'dashed') + 
+          geom_vline(xintercept = dtw.obj$Y_pt[which(dtw.obj$Y_pt > 60 & dtw.obj$Y_pt < 63)][1], color = 'red', linetype = 'dashed') +
+             geom_hline(yintercept = dtw.obj$A_pt[which(dtw.obj$Y_pt > 50 & dtw.obj$Y_pt < 53)][1], color = 'blue', linetype = 'dashed') + 
+          geom_hline(yintercept = dtw.obj$A_pt[which(dtw.obj$Y_pt > 60 & dtw.obj$Y_pt < 63)][1], color = 'blue', linetype = 'dashed') +
+      geom_abline(intercept = 0, slope = 1, color = 'black', size = .5) +
+      #geom_vline(xintercept = c(0, .20, .40, .60, .80, 1), color = 'blue') +
+      ggtitle(title) +
+      theme(plot.title = element_text(size = 20, face = "bold")))
+       
+}
+```
+### plotting all on top of each other -- with average
+```{r}
+dir <- "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/drive-download-20220419T152043Z-001/"
+#setwd(dir)
+
+for (i in 1:length(list.files()))
+#for (i in 1:2)
+{
+  
+  #new.dir <- paste(list.files(include.dirs = T, path = dir)[i], '/', list.files()[i], '_DTW.out', sep = "")
+  
+  dtw.obj <- read.delim(file  = paste(dir, list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/drive-download-20220419T152043Z-001/")[i], '/', 
+                                      list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/drive-download-20220419T152043Z-001/")[i], '_DTW.out', sep = ""), skip = 2)
+
+  dtw.obj <- dtw.obj[-1,]
+
+  title =  strsplit(list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/drive-download-20220419T152043Z-001/")[i], split = 'trajectory_')[[1]][2]
+  dtw.obj <- cbind(dtw.obj, data.frame(time = seq(1:nrow(dtw.obj)),
+                                difference = dtw.obj$Y_pt - dtw.obj$A_pt))
+  
+  # print(ggplot(dtw.obj) + geom_line(aes(x = time, y = difference), size = 1)  + theme_classic()  + geom_hline(yintercept = 0))
+  
+
+  dtw.obj <- cbind(dtw.obj, 
+        Y_pt.norm = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt )),
+        A_pt.norm = c(dtw.obj$A_pt / max(dtw.obj$A_pt )), 
+        norm.dff = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt ) - c(dtw.obj$A_pt / max(dtw.obj$A_pt ))),
+        subsample = i)
+  
+
+  dtw.obj.combined <- rbind(dtw.obj.combined, dtw.obj)
+}
+
+  mean.obj.young <- c()
+  mean.obj.aged <- c()
+  for (i in 1:5776){
+    mean.obj.young <- c(mean.obj.young, mean(dtw.obj.combined$Y_pt[which(dtw.obj.combined$time == as.numeric(i))]))
+        mean.obj.aged <- c(mean.obj.aged, mean(dtw.obj.combined$A_pt[which(dtw.obj.combined$time == as.numeric(i))]))
+  }
+  mean.df <- data.frame(Y_pt = mean.obj.young,
+                        A_pt = mean.obj.aged)
+  
+  
+  
+       print(ggplot() +
+      geom_line(data = dtw.obj.combined, aes(x = Y_pt, y = A_pt, color = as.factor(subsample)), size = 1, alpha = 0.5)  + 
+      geom_line(data = mean.df, aes(x = Y_pt, y = A_pt), color = "black", size = 1.5)  + 
+
+      geom_line(size = 2)  +
+      theme_classic() +
+               geom_vline(xintercept = dtw.obj$Y_pt[which(dtw.obj$Y_pt > 50 & dtw.obj$Y_pt < 53)][1], color = 'red', linetype = 'dashed') + 
+          geom_vline(xintercept = dtw.obj$Y_pt[which(dtw.obj$Y_pt > 60 & dtw.obj$Y_pt < 63)][1], color = 'red', linetype = 'dashed') +
+             geom_hline(yintercept = dtw.obj$A_pt[which(dtw.obj$Y_pt > 50 & dtw.obj$Y_pt < 53)][1], color = 'blue', linetype = 'dashed') + 
+          geom_hline(yintercept = dtw.obj$A_pt[which(dtw.obj$Y_pt > 60 & dtw.obj$Y_pt < 63)][1], color = 'blue', linetype = 'dashed') +
+      geom_abline(intercept = 0, slope = 1, color = 'black', size = .5) +
+      #geom_vline(xintercept = c(0, .20, .40, .60, .80, 1), color = 'blue') +
+      ggtitle(title) +
+      theme(plot.title = element_text(size = 20, face = "bold")))
+       
+
+```
+
+
+
+```{r}
+state_cells <- cds.master[['injury.dpi']]
+sample_cells <- cds.master[['condition.id']]
+df <- data.frame(state_cells, sample_cells)
+table.df <- table(df)
+table.df
+
+```
+
+```{r}
+#cells1.4dpi.aged <- colnames(branch2.tmp[,which(branch2.tmp@colData$injury.dpi == '4dpi' & branch2.tmp@colData$condition.id == 'Aged')])
+
+
+dir <- "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/"
+
+#dir.create(paste(dir, 'Branch1_Branch2_combined_trajectory_subsample1/', sep = ""))
+
+for (bootstrap in 1:10)
+{
+    
+    # ind1 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '0dpi' & cds.master@colData$condition.id == 'Aged' )]) , 1697) == T)
+    # ind2 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '4dpi' & cds.master@colData$condition.id == 'Aged' )]) , 1473) == T)
+    # ind3 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '7dpi' & cds.master@colData$condition.id == 'Young' )]) , 2821) == T)
+  
+    ind1 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '0dpi' & cds.master@colData$condition.id == 'Aged' )]) , 1473) == T)
+    ind2 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '4dpi' & cds.master@colData$condition.id == 'Aged' )]) , 1473) == T)
+    ind3 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '7dpi' & cds.master@colData$condition.id == 'Aged' )]) , 1473) == T)
+    ind4 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '0dpi' & cds.master@colData$condition.id == 'Young' )]) , 1473) == T)
+    ind5 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '4dpi' & cds.master@colData$condition.id == 'Young' )]) , 1473) == T)
+    ind6 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '7dpi' & cds.master@colData$condition.id == 'Young' )]) , 1473) == T)
+    
+    # ctrl.ind <- c(which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '0dpi' & cds.master@colData$condition.id == 'Young' )]))),
+    #               which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '4dpi' & cds.master@colData$condition.id == 'Young' )]))),
+    #               which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '7dpi' & cds.master@colData$condition.id == 'Aged' )]))))
+    
+    # ind.combined <- c(ind1, ind2, ind3, ctrl.ind)
+    
+    ind.combined <- c(ind1, ind2, ind3, ind4, ind5, ind6)
+
+    
+    subsample <- cds.master[, ind.combined]
+    
+    new.dir <- paste('Branch1_Branch2_combined_trajectory_subsample', bootstrap, '/', sep = "")
+    
+    dir.create(paste(dir, new.dir, sep = ""))
+    
+    subsample.young <- subsample[,which(subsample@colData$condition.id == 'Young')]
+    subsample.aged <- subsample[,which(subsample@colData$condition.id == 'Aged')]
+
+        pseudotime.df.young <- data.frame(cells = rownames(colData(subsample.young)),
+                                      pseudotime = pseudotime(subsample.young))
+        pseudotime.df.aged <- data.frame(cells = rownames(colData(subsample.aged)),
+                                          pseudotime = pseudotime(subsample.aged))
+        
+        write.csv(pseudotime.df.young, file = paste(dir, new.dir, 'young_subsample', bootstrap, '_pseudotime.csv', sep = ""))
+        write.csv(pseudotime.df.aged, file = paste(dir, new.dir, 'aged_subsample', bootstrap, '_pseudotime.csv', sep = ""))
+        
+        # counts.mtx
+        counts.young <- counts(subsample.young)
+        counts.aged <- counts(subsample.aged)
+        
+        writeMM(counts.young,  file = paste(dir, new.dir, 'young_subsample', bootstrap, '_counts.mtx', sep = ""))
+        writeMM(counts.aged, file = paste(dir, new.dir, 'aged_subsample', bootstrap, '_counts.mtx', sep = ""))
+        
+        # cellnames_list.txt
+        cell.names.young <- colnames(counts.young)
+        cell.names.aged <- colnames(counts.aged)
+        
+        write.genelist.fun(cell.names.young, filename = paste(dir, new.dir, 'young_subsample', bootstrap, '_cellname_list.txt', sep = ""), paste = 0)
+        write.genelist.fun(cell.names.aged,  filename = paste(dir, new.dir, 'aged_subsample', bootstrap, '_cellname_list.txt', sep = ""), paste = 0)
+}
+
+state_cells <- subsample[['injury.dpi']]
+sample_cells <- subsample[['condition.id']]
+df <- data.frame(state_cells, sample_cells)
+table.df <- table(df)
+table.df
+```
+
+```{r}
+
+pseudotime.df.young <- data.frame(cells = rownames(colData(cds.branch1.young)),
+                                  pseudotime = pseudotime(cds.branch1.young))
+pseudotime.df.aged <- data.frame(cells = rownames(colData(cds.branch1.aged)),
+                                  pseudotime = pseudotime(cds.branch1.aged))
+
+write.csv(pseudotime.df.young, file = paste(dir, "Branch1_young_pseudotime.csv", sep = ""))
+write.csv(pseudotime.df.aged, file = paste(dir, "Branch1_aged_pseudotime.csv", sep = ""))
+
+# counts.mtx
+counts.young <- counts(cds.branch1.young)
+counts.aged <- counts(cds.branch1.aged)
+
+writeMM(counts.young,  file = paste(dir, 'Branch1_young_counts.mtx', sep = ""))
+writeMM(counts.aged, file = paste(dir, 'Branch1_aged_counts.mtx', sep = ""))
+
+# cellnames_list.txt
+cell.names.young <- colnames(counts.young)
+cell.names.aged <- colnames(counts.aged)
+
+write.genelist.fun(cell.names.young, filename = paste(dir, 'Branch1_young_cellname_list.txt'),  paste = 0)
+write.genelist.fun(cell.names.aged,  filename = paste(dir,  'Branch1_aged_cellname_list.txt'), paste = 0)
+
+```
+
+### Variance of each gene across pseudotime
+```{r}
+# updated.seurat$pseudotime <- pseudotime(cds.master)
+# 
+# updated.seurat$pseudotime
+
+list.young <- list()
+list.aged <- list()
+
+for (i in 1:length(rownames(updated.seurat)))
+#for (i in 1:10)
+{
+
+  gene <- rownames(updated.seurat)[i]
+  
+  gene.pseudotime.expression.df <- data.frame(gene.exprs = as.vector(updated.seurat@assays$RNA[gene][which(as.vector(updated.seurat@assays$RNA[gene]) > 0)]),
+                                       pseudotime = as.vector(updated.seurat$pseudotime[which(colnames(updated.seurat@assays$RNA[gene])[which(as.vector(updated.seurat@assays$RNA[gene]) > 0)] %in% colnames(updated.seurat))]),
+                                      condition.id = as.vector(updated.seurat$condition.id[which(as.vector(updated.seurat@assays$RNA[gene]) > 0 %in% colnames(updated.seurat))]))
+
+# sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Aged")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Aged')])))
+# sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Young")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Young')])))
+
+  # calculating standard error for each gene over pseudotime sd / sqrt(n)
+  list.young[gene] <- sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Young")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Young')])))
+  list.aged[gene] <- sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Aged")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Aged')])))
+  
+  time.vec <- c(100, 500,seq(1 , 30000, by = 1000))
+  if(i %in% time.vec) (print(i))
+}
+
+```
+
+```{r}
+df <- data.frame(young = unlist(list.young),
+                 aged =  unlist(list.aged))
+
+df[is.na(df)] <- 0
+
+ggplot(df, aes(x = young, y = aged)) + geom_point() + ggtitle("Standard error of individual genes across pseudotime") + theme_classic()
+```
+### Expression variance?
+```{r}
+list.young.exprs <- list()
+list.aged.exprs <- list()
+
+for (i in 1:length(rownames(updated.seurat)))
+#for (i in 1:10)
+{
+
+  gene <- rownames(updated.seurat)[i]
+  
+  exprs.df <- data.frame(gene.exprs = as.vector(updated.seurat@assays$RNA[gene][which(as.vector(updated.seurat@assays$RNA[gene]) > 0)]),
+                                       pseudotime = as.vector(updated.seurat$pseudotime[which(colnames(updated.seurat@assays$RNA[gene])[which(as.vector(updated.seurat@assays$RNA[gene]) > 0)] %in% colnames(updated.seurat))]),
+                                      condition.id = as.vector(updated.seurat$condition.id[which(as.vector(updated.seurat@assays$RNA[gene]) > 0 %in% colnames(updated.seurat))]))
+
+# sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Aged")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Aged')])))
+# sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Young")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Young')])))
+
+  # calculating standard error for each gene over pseudotime sd / sqrt(n)
+  list.young.exprs[gene] <- sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Young")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Young')])))
+  list.aged.exprs[gene] <- sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Aged")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Aged')])))
+  
+  time.vec <- c(100, 500,seq(1 , 30000, by = 1000))
+  if(i %in% time.vec) (print(i))
+}
+```
+
+```{r}
+
+state_cells <- cds.branch1[['injury.dpi']]
+sample_cells <- cds.branch1[['condition.id']]
+df <- data.frame(state_cells, sample_cells)
+table.df <- table(df)
+table.df
+```
+

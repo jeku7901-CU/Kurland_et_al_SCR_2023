@@ -1,0 +1,4405 @@
+# 4/1/22
+### Packages
+```{r include=FALSE}
+library(Seurat)
+library(SoupX)
+library(monocle)
+library(cowplot)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(gplots)
+library(limma)
+library(gridExtra)
+library(DoubletFinder)
+library(enrichR)
+library(monocle3)
+library(SeuratWrappers)
+library(scales)
+library(magrittr)
+library(tradeSeq)
+library(clusterExperiment)
+library(RColorBrewer)
+library(rjson)
+library(gridExtra)
+library(grid)
+library(lattice)
+```
+
+# Functions
+
+#not in
+```{r}
+`%nin%` = Negate(`%in%`)
+
+mets.cols <- c( '#FF5910', '#002D72')
+```
+
+### write.table
+```{r}
+
+write.genelist.fun <- function(gene.list, filename, paste = 1)
+{
+  if (paste == 1) {filename = paste("~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/", filename, sep = "")}
+  if (paste == 2) {filename = paste("~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/", filename, sep = "")}
+write.table(gene.list,
+            file = filename,
+            col.names = F,
+                              row.names = F,
+                              quote = F,
+                              sep = "\n")
+}
+```
+
+### convert uppercase genenames to lowercase
+```{r}
+gene.uppercase.to.lowercase.fun <- function(string)
+{
+  lower.case.name.half.tmp <- tolower(substring(string, 2))
+  full.format.name <- paste(substring(string, first = 1, last = 1), lower.case.name.half.tmp, sep = "")
+  return(full.format.name)
+}
+
+```
+
+### upstream.tf.plotting.fun
+```{r}
+# branch2_Trust_TFs <- upstream.tf.plotting.fun(enrich.df.filepath =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch2_Trust_TFs.csv", 
+#                          sce = sce.branch2.aged.young.FULL,
+#                          print.list = F)
+
+upstream.tf.plotting.fun <- function(enrich.df.filepath, 
+                                     sce, 
+                                     normalize = 1, 
+                                     print.genelist.for = NULL, 
+                                     print.list = T, 
+                                     cols = mets.cols)
+{
+  enrich.df <- read.csv(file = enrich.df.filepath) 
+
+
+  enrich.df <- enrich.df[order(enrich.df$Combined.Score, decreasing = T),]
+  enrich.df <- enrich.df[which(enrich.df$Adjusted.P.value < 0.05),]
+  
+  if (nrow(enrich.df) > 50){enrich.df <- enrich.df[1:50, ]}
+
+  
+  ### To turn the enrichr protein names to genes
+  list1 <- list()
+  for (i in 1:nrow(enrich.df))
+    {
+      uppercase.genes <- strsplit(enrich.df$Genes[i], split = ";")
+      
+      for (j in 1:length(uppercase.genes[[1]]))
+      {
+        lower.case.name.half.tmp <- tolower(substring(uppercase.genes[[1]][j], 2))
+        full.format.name <- paste(substring(uppercase.genes[[1]][j], first = 1, last = 1), lower.case.name.half.tmp, sep = "")
+        list1[[paste(enrich.df$Term[i])]][j] <- full.format.name
+      }
+    }
+
+     #if (print.list == T) {print(list1)}
+  if (print.list == T) {return(list1)}
+  
+##plotting loop
+for (plot.num in 1:length(list1))
+
+  {
+    genelist <- list1[[plot.num]]
+
+    #genelist <- c(gene.uppercase.to.lowercase.fun
+    
+    # remove genes that are not in the sce
+    if (any(list1[[plot.num]] %in% rownames(sce) == FALSE) == TRUE)
+      {
+      genelist <- genelist[-which(list1[[plot.num]] %nin% rownames(sce))]
+      }
+      
+    tf.name <- gene.uppercase.to.lowercase.fun( strsplit(names(list1)[plot.num], split = " ")[[1]][1])
+
+    if (tf.name %in% genelist == T) {genelist <- genelist[-which(tf.name %in% genelist)]}
+    
+    #if (print.genelist.for == tf.name) {print(paste(tf.name, "::", genelist, sep = ""))}
+ 
+      
+      ysmooth <- predictSmooth(models = sce, gene = genelist, nPoints = 20)
+     
+    ymooth.spread <- spread(ysmooth, key = gene, value = yhat)
+    
+    ymooth.spread.l1.time <- ymooth.spread[1:20, 3:ncol(ymooth.spread)]
+    ymooth.spread.l2.time <- ymooth.spread[21:40, 3:ncol(ymooth.spread)]
+        
+    sderr.l1 <- rowSds(as.matrix(ymooth.spread.l1.time)) / sqrt(ncol(as.matrix(ymooth.spread.l1.time)))
+        
+    ymooth.spread.l1.mean <- data.frame(time = seq(1:20),
+                                        lineage = rep("Aged", 20), 
+                                        line.mean = rowMeans(ymooth.spread.l1.time),
+                                        
+                                        sderr = sderr.l1,
+                                        sd.high = rowMeans(ymooth.spread.l1.time) + sderr.l1,
+                                        sd.low = rowMeans(ymooth.spread.l1.time) - sderr.l1,
+                                        row.names = NULL)
+                            
+    
+    sderr.l2 <- rowSds(as.matrix(ymooth.spread.l2.time)) / sqrt(ncol(as.matrix(ymooth.spread.l2.time)))
+
+    ymooth.spread.l2.mean <- data.frame(time = seq(1:20),
+                                        lineage = rep("Young", 20), 
+                                        line.mean = rowMeans(ymooth.spread.l2.time),
+                                        
+                                        sderr = rowSds(as.matrix(ymooth.spread.l2.time)) / sderr.l2,
+                                        sd.high = rowMeans(ymooth.spread.l2.time) + sderr.l2,
+                                        sd.low = rowMeans(ymooth.spread.l2.time) - sderr.l2,
+                                        row.names = NULL)
+      
+    genes.l1.l2.means <-rbind(ymooth.spread.l1.mean, ymooth.spread.l2.mean)
+    
+    ### ACTUAL TF GENE
+    if (tf.name %nin% rownames(sce)) {next}
+    
+        ysmooth <- predictSmooth(models = sce, gene = tf.name, nPoints = 20)
+     
+    ymooth.spread <- spread(ysmooth, key = gene, value = yhat)
+    
+    
+        ymooth.spread.l1.time.tf <- ymooth.spread[1:20, 3:ncol(ymooth.spread)]
+    ymooth.spread.l2.time.tf <- ymooth.spread[21:40, 3:ncol(ymooth.spread)]
+    
+        sderr.l1 <- sd(as.matrix(ymooth.spread.l1.time.tf)) / sqrt(ncol(as.matrix(ymooth.spread.l1.time.tf)))
+
+    
+        ymooth.spread.l1.mean.tf <- data.frame(time = seq(1:20),
+                                        lineage = rep(paste(tf.name, "_", "Aged", sep = ""), 20), 
+                                        #line.mean = mean(ymooth.spread.l1.time.tf),
+                                        line.mean = ymooth.spread.l1.time.tf,
+                                        
+                                        sderr = sderr.l1,
+                                        sd.high = ymooth.spread.l1.time.tf + sderr.l1,
+                                        sd.low = ymooth.spread.l1.time.tf - sderr.l1,
+                                        row.names = NULL)
+                            
+    
+    sderr.l2 <- sd(as.matrix(ymooth.spread.l2.time.tf)) / sqrt(ncol(as.matrix(ymooth.spread.l2.time.tf)))
+
+    ymooth.spread.l2.mean.tf <- data.frame(time = seq(1:20),
+                                        lineage = rep(paste(tf.name, "_", "Young", sep = ""), 20), 
+                                        line.mean = ymooth.spread.l2.time.tf,
+                                        
+                                        sderr =  sderr.l2,
+                                        sd.high = ymooth.spread.l2.time.tf + sderr.l2,
+                                        sd.low = ymooth.spread.l2.time.tf - sderr.l2,
+                                        row.names = NULL)
+    TF.l1.l2.means <-rbind(ymooth.spread.l1.mean.tf, ymooth.spread.l2.mean.tf)
+    
+    
+    # plot with TF expression normalized with target gene expression
+    if (normalize == 1)
+      {
+              print(   
+         ggplot(genes.l1.l2.means, aes(x = time, y = line.mean / max(line.mean), color = lineage)) + 
+         geom_line(size = 2) + 
+         ggtitle(paste(names(list1[plot.num]), sep = "")) +
+         geom_ribbon( aes(x = time, ymin = sd.low, ymax = sd.high, fill=lineage,), color = 'black',outline.type = "both", size = 0.1, alpha=0.5) + 
+           theme_classic() + 
+
+                    geom_line(data = TF.l1.l2.means, aes(x = time, y = line.mean / max(genes.l1.l2.means$line.mean), color = lineage), size = 2, linetype = 'dashed')  + 
+         ggtitle(paste(names(list1[plot.num]), sep = "")) +
+         geom_ribbon(data = TF.l1.l2.means, aes(x = time, ymin = sd.low, ymax = sd.high, fill=lineage,), color = 'black',outline.type = "both", size = 0.1, alpha=0.2) + 
+
+                    scale_fill_manual(values = c(cols, cols), 
+                                      breaks = c("Aged", "Young", paste(tf.name, "_", "Aged", sep = ""), paste(tf.name, "_", "Young", sep = "")))+
+                    scale_color_manual(values = c(cols, cols),
+                                      breaks = c("Aged", "Young", paste(tf.name, "_", "Aged", sep = ""), paste(tf.name, "_", "Young", sep = "")))+
+           theme_classic()
+         )
+    }
+      
+    
+      # Togerhter plot
+        print(   
+         ggplot(genes.l1.l2.means, aes(x = time, y = line.mean, color = lineage)) + 
+         geom_line(size = 2) + 
+         ggtitle(paste(names(list1[plot.num]), sep = "")) +
+         geom_ribbon( aes(x = time, ymin = sd.low, ymax = sd.high, fill=lineage,), color = 'black',outline.type = "both", size = 0.1, alpha=0.5) + 
+           theme_classic() + 
+
+                    geom_line(data = TF.l1.l2.means, aes(x = time, y = line.mean, color = lineage), size = 2, linetype = 'dashed')  + 
+         ggtitle(paste(names(list1[plot.num]), sep = "")) +
+         geom_ribbon(data = TF.l1.l2.means, aes(x = time, ymin = sd.low, ymax = sd.high, fill=lineage,), color = 'black',outline.type = "both", size = 0.1, alpha=0.2) + 
+
+                    scale_fill_manual(values = c(cols, cols), 
+                                      breaks = c("Aged", "Young", paste(tf.name, "_", "Aged", sep = ""), paste(tf.name, "_", "Young", sep = "")))+
+                    scale_color_manual(values = c(cols, cols),
+                                      breaks = c("Aged", "Young", paste(tf.name, "_", "Aged", sep = ""), paste(tf.name, "_", "Young", sep = "")))+
+           theme_classic()
+         )
+        
+        # TF-alone plot
+               print(   
+         ggplot() + 
+
+  
+
+                    geom_line(data = TF.l1.l2.means, aes(x = time, y = line.mean, color = lineage), size = 2, linetype = 'dashed')  + 
+         ggtitle(paste(names(list1[plot.num]), sep = "")) +
+         geom_ribbon(data = TF.l1.l2.means, aes(x = time, ymin = sd.low, ymax = sd.high, fill=lineage,), color = 'black',outline.type = "both", size = 0.1, alpha=0.2) + 
+
+                    scale_fill_manual(values = c(cols,cols), 
+                                      breaks = c("Aged", "Young", paste(tf.name, "_", "Aged", sep = ""), paste(tf.name, "_", "Young", sep = "")))+
+                    scale_color_manual(values = c(cols, cols),
+                                      breaks = c("Aged", "Young", paste(tf.name, "_", "Aged", sep = ""), paste(tf.name, "_", "Young", sep = "")))+
+           theme_classic()
+         )
+  }
+}
+```
+
+### gene.plotting.from.enrichr.function
+```{r}
+ function(enrich.df.filepath, 
+                                     sce, 
+                                     normalize = 1, 
+                                     print.genelist.for = NULL, 
+                                     print.list = T, 
+                                     cols = mets.cols)
+{
+  enrich.df <- read.csv(file = enrich.df.filepath) 
+
+
+  enrich.df <- enrich.df[order(enrich.df$Combined.Score, decreasing = T),]
+  enrich.df <- enrich.df[which(enrich.df$Adjusted.P.value < 0.05),]
+  
+  if (nrow(enrich.df) > 50){enrich.df <- enrich.df[1:50, ]}
+
+  
+  ### To turn the enrichr protein names to genes
+  list1 <- list()
+  for (i in 1:nrow(enrich.df))
+    {
+      uppercase.genes <- strsplit(enrich.df$Genes[i], split = ";")
+      
+      for (j in 1:length(uppercase.genes[[1]]))
+      {
+        lower.case.name.half.tmp <- tolower(substring(uppercase.genes[[1]][j], 2))
+        full.format.name <- paste(substring(uppercase.genes[[1]][j], first = 1, last = 1), lower.case.name.half.tmp, sep = "")
+        list1[[paste(enrich.df$Term[i])]][j] <- full.format.name
+      }
+    }
+
+     #if (print.list == T) {print(list1)}
+  if (print.list == T) {return(list1)}
+  
+##plotting loop
+for (plot.num in 1:length(list1))
+
+  {
+    genelist <- list1[[plot.num]]
+       # remove genes that are not in the sce
+    if (any(genelist[[plot.num]] %in% rownames(sce) == FALSE) == TRUE)
+      {
+      genelist <- genelist[-which(genelist[[plot.num]] %nin% rownames(sce))]
+      }
+      
+      
+      ysmooth <- predictSmooth(models = sce, gene = genelist, nPoints = 20)
+     
+    ymooth.spread <- spread(ysmooth, key = gene, value = yhat)
+    
+    ymooth.spread.l1.time <- ymooth.spread[1:20, 3:ncol(ymooth.spread)]
+    ymooth.spread.l2.time <- ymooth.spread[21:40, 3:ncol(ymooth.spread)]
+        
+    sderr.l1 <- rowSds(as.matrix(ymooth.spread.l1.time)) / sqrt(ncol(as.matrix(ymooth.spread.l1.time)))
+        
+    ymooth.spread.l1.mean <- data.frame(time = seq(1:20),
+                                        lineage = rep("Aged", 20), 
+                                        line.mean = rowMeans(ymooth.spread.l1.time),
+                                        
+                                        sderr = sderr.l1,
+                                        sd.high = rowMeans(ymooth.spread.l1.time) + sderr.l1,
+                                        sd.low = rowMeans(ymooth.spread.l1.time) - sderr.l1,
+                                        row.names = NULL)
+                            
+    
+    sderr.l2 <- rowSds(as.matrix(ymooth.spread.l2.time)) / sqrt(ncol(as.matrix(ymooth.spread.l2.time)))
+
+    ymooth.spread.l2.mean <- data.frame(time = seq(1:20),
+                                        lineage = rep("Young", 20), 
+                                        line.mean = rowMeans(ymooth.spread.l2.time),
+                                        
+                                        sderr = rowSds(as.matrix(ymooth.spread.l2.time)) / sderr.l2,
+                                        sd.high = rowMeans(ymooth.spread.l2.time) + sderr.l2,
+                                        sd.low = rowMeans(ymooth.spread.l2.time) - sderr.l2,
+                                        row.names = NULL)
+      
+    genes.l1.l2.means <-rbind(ymooth.spread.l1.mean, ymooth.spread.l2.mean)
+        
+        # gene plot
+               print(   
+                 ggplot() + 
+                 geom_line(data = genes.l1.l2.means, aes(x = time, y = line.mean, color = lineage), size = 2, linetype = 'dashed')  + 
+                 geom_ribbon(data = genes.l1.l2.means, aes(x = time, ymin = sd.low, ymax = sd.high, fill=lineage,), color = 'black',outline.type = "both", size = 0.1, alpha=0.2) + 
+                 scale_fill_manual(values = c(cols), 
+                                      breaks = c("Aged", "Young", paste(tf.name, "_", "Aged", sep = ""), paste(tf.name, "_", "Young", sep = "")))+
+                 scale_color_manual(values = c(cols),
+                                      breaks = c("Aged", "Young", paste(tf.name, "_", "Aged", sep = ""), paste(tf.name, "_", "Young", sep = "")))+
+                theme_classic()
+         )
+  }
+}
+```
+
+
+
+### gene.plotting.function
+```{r}
+ # sce = sce.branch2.aged.young.FULL
+ # genelist = unique(glycolysis.not.diff)
+#genelist = unique(not.diff)
+#genelist <- unique(pathway.list$`electron transport chain`)
+#sce = sce.branch2.sub1.aged.young
+
+gene.plotting.function <- function(genelist, 
+                                     sce, 
+                                     normalize = 1, 
+                                     print.genelist.for = NULL, 
+                                     print.list = T, 
+                                     cols = mets.cols,
+                                     title = "",
+                                     NA.0.correction = T)
+{
+
+##plotting loop
+  
+    # remove genes that are not in the sce
+    if (any(genelist %in% rownames(sce) == FALSE) == TRUE)
+      {
+      genelist <- genelist[-which(genelist %nin% rownames(sce))]
+      }
+      
+      #if (grep('Bmp7', colnames(ymooth.spread.l1.time)) == 28) {genelist <- genelist[-28]}
+  
+      ysmooth <- predictSmooth(models = sce, gene = genelist, nPoints = 20)
+     
+    ymooth.spread <- spread(ysmooth, key = gene, value = yhat)
+    
+    ymooth.spread.l1.time <- ymooth.spread[1:20, 3:ncol(ymooth.spread)]
+    ymooth.spread.l2.time <- ymooth.spread[21:40, 3:ncol(ymooth.spread)]
+    
+    if (NA.0.correction == T){
+    ymooth.spread.l1.time <- ymooth.spread.l1.time[,-which(is.na(ymooth.spread.l1.time[5,]) | ymooth.spread.l1.time[5,] == 0  )]
+    ymooth.spread.l2.time <- ymooth.spread.l2.time[,-which(is.na(ymooth.spread.l2.time[5,]) | ymooth.spread.l2.time[5,] == 0  )]
+    }
+        
+    sderr.l1 <- rowSds(as.matrix(ymooth.spread.l1.time)) / sqrt(ncol(as.matrix(ymooth.spread.l1.time)))
+        
+    ymooth.spread.l1.mean <- data.frame(time = seq(1:20),
+                                        lineage = rep("Aged", 20), 
+                                        line.mean = rowMeans(ymooth.spread.l1.time),
+                                        
+                                        sderr = sderr.l1,
+                                        sd.high = rowMeans(ymooth.spread.l1.time) + sderr.l1,
+                                        sd.low = rowMeans(ymooth.spread.l1.time) - sderr.l1,
+                                        row.names = NULL)
+                            
+    
+    sderr.l2 <- rowSds(as.matrix(ymooth.spread.l2.time)) / sqrt(ncol(as.matrix(ymooth.spread.l2.time)))
+
+    ymooth.spread.l2.mean <- data.frame(time = seq(1:20),
+                                        lineage = rep("Young", 20), 
+                                        line.mean = rowMeans(ymooth.spread.l2.time),
+                                        
+                                        sderr = rowSds(as.matrix(ymooth.spread.l2.time)) / sderr.l2,
+                                        sd.high = rowMeans(ymooth.spread.l2.time) + sderr.l2,
+                                        sd.low = rowMeans(ymooth.spread.l2.time) - sderr.l2,
+                                        row.names = NULL)
+      
+    genes.l1.l2.means <-rbind(ymooth.spread.l1.mean, ymooth.spread.l2.mean)
+        
+        # gene plot
+               print(   
+                 ggplot() + 
+                 geom_line(data = genes.l1.l2.means, aes(x = time, y = line.mean, color = lineage), size = 2)  + 
+                 geom_ribbon(data = genes.l1.l2.means, aes(x = time, ymin = sd.low, ymax = sd.high, fill=lineage,), color = 'black',outline.type = "both", size = 0.1, alpha=0.2) + 
+                 scale_fill_manual(values = c(cols), 
+                                   breaks = c("Aged", "Young"))+
+                 scale_color_manual(values = c(cols),
+                                   breaks = c("Aged", "Young"))+
+                theme_classic() + ggtitle(title)
+         )
+
+}
+```
+
+
+
+#### Reading in seurat obj and converting to cds
+```{r}
+load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/final_myogenic_subset_seurat.RData")
+
+DimPlot(myogenic.subset.umap.final)
+updated.seurat <- myogenic.subset.umap.final
+rm(myogenic.subset.umap.final)
+
+### main cds
+# load(file = "/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/monocle3_obj_1.RData")
+
+### cds.master
+load(file = "/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/cds_master.RData") # this is equivalent to cds1_newpt, with the pseudotime starting from base
+
+
+
+## If wanting to start from fresh cds:
+#cds.protected <- as.cell_data_set(myogenic.subset.umap.final)
+
+### cds branch objects
+load(file = '~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/cds_branch_objs.RData')
+
+### sce branch1
+load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/sce_branch1_aged_young_FULL.RData")
+
+### sce branch2
+load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/sce_branch2_aged_young_FULL.RData")
+
+```
+
+### Plot cds.master --- this cds object has pseudotime apllied to it (make into one with original pseudotime direction)
+```{r}
+plot_cells(cds.master, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = T, label_cell_groups = T, color_cells_by = 'pseudotime')
+plot_cells(cds.master, label_groups_by_cluster=F, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_leaves = F, label_roots = F, color_cells_by = 'pseudotime')
+
+plot_cells(cds.master, label_groups_by_cluster=F, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_leaves = F, label_roots = F, color_cells_by = 'condition.id', alpha = 0.6) + scale_color_manual(values = c('red', 'black')) 
+
+plot_cells(cds.master, label_groups_by_cluster=F, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_leaves = F, label_roots = F, color_cells_by = 'injury.dpi')
+plot_cells(cds.master, label_groups_by_cluster=F, cell_size = 0.6, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_leaves = F, label_roots = F, genes = "Pax7", scale_to_range = T)
+plot_cells(cds.master, label_groups_by_cluster=F, cell_size = 0.6, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_leaves = F, label_roots = F, genes = "Runx1", scale_to_range = T)
+plot_cells(cds.master, label_groups_by_cluster=F, cell_size = 0.6, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_leaves = F, label_roots = F, genes = "Myh3", scale_to_range = T)
+plot_cells(cds.master, label_groups_by_cluster=F, cell_size = 0.6, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_leaves = F, label_roots = F, genes = "Myh8", scale_to_range = T)
+plot_cells(cds.master, label_groups_by_cluster=F, cell_size = 0.6, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_leaves = F, label_roots = F, genes = "Myh4", scale_to_range = T)
+plot_cells(cds.master, label_groups_by_cluster=F, cell_size = 0.6, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_leaves = F, label_roots = F, genes = "Ttn", scale_to_range = T)
+plot_cells(cds.master, label_groups_by_cluster=F, cell_size = 0.6, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_leaves = F, label_roots = F, genes = "Neb", scale_to_range = T)
+```
+
+#### Separating Branch1 and Branch2 and clustering each branch with aged and young-adult separately and then combined
+
+### cds.branch1 and cds.branch2
+```{r}
+cds.master$monocle.clusters.working <- cds.master@clusters@listData$UMAP$clusters
+
+branch1.clusters <- c("12", "15", "11", "7", '10', '3')
+cds.branch1 <- cds.master[, which(cds.master@clusters@listData$UMAP$clusters == branch1.clusters[1] | 
+                                         cds.master@clusters@listData$UMAP$clusters == branch1.clusters[2] | 
+                                         cds.master@clusters@listData$UMAP$clusters == branch1.clusters[3] |
+                                         cds.master@clusters@listData$UMAP$clusters == branch1.clusters[4] |
+                                         cds.master@clusters@listData$UMAP$clusters == branch1.clusters[5] |
+                                         cds.master@clusters@listData$UMAP$clusters == branch1.clusters[6])]
+plot_cells(cds.branch1, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, 
+           label_roots = F, label_leaves = F)
+
+
+branch2.clusters <- c(12, seq(1:15)[seq(1:15) %in% branch1.clusters == FALSE]) # everything not in branch1 (plus the elbow)
+cds.branch2 <- cds.master[, which(cds.master@clusters@listData$UMAP$clusters == branch2.clusters[1] | 
+                                         cds.master@clusters@listData$UMAP$clusters == branch2.clusters[2] | 
+                                         cds.master@clusters@listData$UMAP$clusters == branch2.clusters[3] |
+                                         cds.master@clusters@listData$UMAP$clusters == branch2.clusters[4] |
+                                         cds.master@clusters@listData$UMAP$clusters == branch2.clusters[5] |
+                                         cds.master@clusters@listData$UMAP$clusters == branch2.clusters[6] |
+                                         cds.master@clusters@listData$UMAP$clusters == branch2.clusters[7] |
+                                         cds.master@clusters@listData$UMAP$clusters == branch2.clusters[8] |
+                                         cds.master@clusters@listData$UMAP$clusters == branch2.clusters[9] |
+                                         cds.master@clusters@listData$UMAP$clusters == branch2.clusters[10])]
+
+plot_cells(cds.master, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+
+plot_cells(cds.branch2, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, 
+           label_roots = F, label_leaves = F)
+
+```
+
+### Making branch.path
+```{r}
+tmp1 <- data.frame(cells = colnames(cds.branch1), binary = 1)
+tmp2 <- data.frame(cells = colnames(cds.branch2), binary = 3)
+
+
+branch1 <- tmp1$cells[tmp1$cells %nin% tmp2$cells == T]
+branch2 <- tmp2$cells[tmp2$cells %nin% tmp1$cells == T]
+
+both <- tmp1$cells[tmp1$cells %in% tmp2$cells == T]
+
+
+branch1.df <- data.frame(cell = branch1, branch.path = 'branch1')
+branch2.df <- data.frame(cell = branch2, branch.path = 'branch2')
+both.df <- data.frame(cell = both, branch.path = 'both')
+
+combined.df <- rbind(branch1.df, branch2.df, both.df)
+combined.df <- combined.df[order(match(combined.df$cell, colnames(updated.seurat))),]
+
+
+updated.seurat$branch.path <- combined.df$branch.path
+cds.master@colData$branch.path <- updated.seurat$branch.path
+plot_cells(cds.master, color_cells_by = 'branch.path')
+
+rm(tmp1, tmp2, combined.df, branch1.df, branch2.df, both.df, branch1, branch2, both)
+```
+```{r}
+load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/sce_branch2_sub1_aged_young.RData")
+
+branch2_Archs4_TFs <- upstream.tf.plotting.fun(enrich.df.filepath =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch2_arch4TF.csv",
+                          sce = sce.branch2.aged.young.FULL,
+                          print.list = T)
+
+branch1_archs4tf_TFs <- upstream.tf.plotting.fun(enrich.df.filepath =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/ARCHS4_TFs_Coexp_table_BRANCH1.csv", sce = sce.branch1.aged.young.FULL, print.list = T)
+
+```
+
+### gene.plotting.function
+```{r}
+ # sce = sce.branch2.aged.young.FULL
+ # genelist = unique(glycolysis.not.diff)
+#genelist = unique(not.diff)
+#genelist <- unique(pathway.list$`electron transport chain`)
+#sce = sce.branch2.sub1.aged.young
+
+gene.plotting.function <- function(genelist, 
+                                     sce, 
+                                     normalize = 1, 
+                                     print.genelist.for = NULL, 
+                                     print.list = T, 
+                                     cols = mets.cols,
+                                     title = "",
+                                     NA.0.correction = T, 
+                                     size = 1, 
+                                     text.size = 8, 
+                                   top.margin = 2, 
+                                   left.margin = -8,
+                                   right.margin = 3, 
+                                   y.2.decimals = T,
+                                   y.NO.decimals = T, 
+                                   title.size = 12, 
+                                   x.axis = T)
+{
+
+##plotting loop
+  
+    # remove genes that are not in the sce
+    if (any(genelist %in% rownames(sce) == FALSE) == TRUE)
+      {
+      genelist <- genelist[-which(genelist %nin% rownames(sce))]
+      }
+    
+    ysmooth <- predictSmooth(models = sce, gene = genelist, nPoints = 20)
+     
+    ymooth.spread <- spread(ysmooth, key = gene, value = yhat)
+    
+    ymooth.spread.l1.time <- ymooth.spread[1:20, 3:ncol(ymooth.spread)]
+    ymooth.spread.l2.time <- ymooth.spread[21:40, 3:ncol(ymooth.spread)]
+    
+    if (NA.0.correction == T){
+    ymooth.spread.l1.time <- ymooth.spread.l1.time[,-which(is.na(ymooth.spread.l1.time[5,]) | ymooth.spread.l1.time[5,] == 0  )]
+    ymooth.spread.l2.time <- ymooth.spread.l2.time[,-which(is.na(ymooth.spread.l2.time[5,]) | ymooth.spread.l2.time[5,] == 0  )]
+    }
+        
+    sderr.l1 <- rowSds(as.matrix(ymooth.spread.l1.time)) / sqrt(ncol(as.matrix(ymooth.spread.l1.time)))
+        
+    ymooth.spread.l1.mean <- data.frame(time = seq(1:20),
+                                        lineage = rep("Aged", 20), 
+                                        line.mean = rowMeans(ymooth.spread.l1.time),
+                                        
+                                        sderr = sderr.l1,
+                                        sd.high = rowMeans(ymooth.spread.l1.time) + sderr.l1,
+                                        sd.low = rowMeans(ymooth.spread.l1.time) - sderr.l1,
+                                        row.names = NULL)
+                            
+    
+    sderr.l2 <- rowSds(as.matrix(ymooth.spread.l2.time)) / sqrt(ncol(as.matrix(ymooth.spread.l2.time)))
+
+    ymooth.spread.l2.mean <- data.frame(time = seq(1:20),
+                                        lineage = rep("Young", 20), 
+                                        line.mean = rowMeans(ymooth.spread.l2.time),
+                                        
+                                        sderr = rowSds(as.matrix(ymooth.spread.l2.time)) / sderr.l2,
+                                        sd.high = rowMeans(ymooth.spread.l2.time) + sderr.l2,
+                                        sd.low = rowMeans(ymooth.spread.l2.time) - sderr.l2,
+                                        row.names = NULL)
+      
+    genes.l1.l2.means <-rbind(ymooth.spread.l1.mean, ymooth.spread.l2.mean)
+        
+        # gene plot
+  if (y.2.decimals == T) {
+     ggplot() + 
+     geom_line(data = genes.l1.l2.means, aes(x = time, y = line.mean, color = lineage), size = size)  + 
+     #geom_ribbon(data = genes.l1.l2.means, aes(x = time, ymin = sd.low, ymax = sd.high, fill=lineage,), color = 'black',outline.type = "both", size = 0.1, alpha=0.2) + 
+     scale_fill_manual(values = c(cols), 
+                       breaks = c("Aged", "Young"))+
+     scale_color_manual(values = c(cols),
+                       breaks = c("Aged", "Young"))+ theme_classic() +
+
+    
+    theme(axis.text.x = element_text(size = text.size)) +     
+    theme(axis.text.y = element_text(size = text.size)) +
+    theme(axis.title.x = element_blank()) +
+    theme(plot.title = element_text(size = title.size)) + 
+    theme(axis.title.y = element_text(size = text.size, margin = margin(t = 0, r = 0, b = 0, l = left.margin))) + 
+    theme(plot.margin = margin(t = top.margin,  # Top margin
+                             r = right.margin,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) + # Left margin 
+    scale_y_continuous(labels = scales::number_format(accuracy = 0.1, decimal.mark = '.')) + 
+       NoLegend()+
+    ggtitle(title) + 
+      xlab(NULL) + 
+      ylab(NULL) 
+  }
+    
+     if (x.axis == F) {
+     ggplot() + 
+     geom_line(data = genes.l1.l2.means, aes(x = time, y = line.mean, color = lineage), size = size)  + 
+     scale_fill_manual(values = c(cols), 
+                       breaks = c("Aged", "Young"))+
+     scale_color_manual(values = c(cols),
+                       breaks = c("Aged", "Young"))+ theme_classic() +
+    
+    theme(axis.text.x = element_blank()) +     
+    theme(axis.text.y = element_text(size = text.size)) +
+    theme(axis.title.x = element_blank()) +
+    theme(plot.title = element_text(size = title.size)) + 
+    theme(axis.title.y = element_blank()) + 
+    theme(plot.margin = margin(t = top.margin,  # Top margin
+                             r = right.margin,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) + # Left margin 
+    scale_y_continuous(labels = scales::number_format(accuracy = 0.1, decimal.mark = '.')) + 
+       NoLegend()+
+    ggtitle(title) + 
+      xlab(NULL) + 
+      ylab(NULL) 
+  }
+    
+      if (y.NO.decimals == T) {
+     ggplot() + 
+     geom_line(data = genes.l1.l2.means, aes(x = time, y = line.mean, color = lineage), size = size)  + 
+     #geom_ribbon(data = genes.l1.l2.means, aes(x = time, ymin = sd.low, ymax = sd.high, fill=lineage,), color = 'black',outline.type = "both", size = 0.1, alpha=0.2) + 
+     scale_fill_manual(values = c(cols), 
+                       breaks = c("Aged", "Young"))+
+     scale_color_manual(values = c(cols),
+                       breaks = c("Aged", "Young"))+ theme_classic() +
+
+    
+    theme(axis.text.x = element_text(size = text.size)) +     
+    theme(axis.text.y = element_text(size = text.size)) +
+    theme(axis.title.x = element_blank()) +
+    theme(plot.title = element_text(size = title.size)) + 
+    theme(axis.title.y = element_text(size = text.size, margin = margin(t = 0, r = 0, b = 0, l = left.margin ))) + 
+    theme(plot.margin = margin(t = top.margin,  # Top margin
+                             r = right.margin,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) + # Left margin 
+    scale_y_continuous(labels = scales::number_format(accuracy = 1)) + 
+       NoLegend()+
+    ggtitle(title) + 
+      xlab(NULL) + 
+      ylab(NULL) 
+      }
+    
+    else (
+           ggplot() + 
+     geom_line(data = genes.l1.l2.means, aes(x = time, y = line.mean, color = lineage), size = size)  + 
+     #geom_ribbon(data = genes.l1.l2.means, aes(x = time, ymin = sd.low, ymax = sd.high, fill=lineage,), color = 'black',outline.type = "both", size = 0.1, alpha=0.2) + 
+     scale_fill_manual(values = c(cols), 
+                       breaks = c("Aged", "Young"))+
+     scale_color_manual(values = c(cols),
+                       breaks = c("Aged", "Young"))+ theme_classic() +
+
+    
+    theme(axis.text.x = element_text(size = text.size)) +     
+    theme(axis.text.y = element_text(size = text.size)) +
+    theme(axis.title.x = element_blank()) +
+    theme(plot.title = element_text(size = title.size)) + 
+    theme(axis.title.y = element_text(size = text.size, margin = margin(t = 0, r = 0, b = 0, l = left.margin))) + 
+    theme(plot.margin = margin(t = top.margin,  # Top margin
+                             r = right.margin,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) + # Left margin 
+       NoLegend()+
+    ggtitle(title) + 
+      xlab(NULL) + 
+      ylab(NULL) 
+    )
+}
+```
+
+### upstream.tf.plotting.fun
+```{r}
+upstream.tf.plotting.fun <- function(enrich.df.filepath, 
+                                     sce, 
+                                     normalize = 1, 
+                                     print.genelist.for = NULL, 
+                                     print.list = T, 
+                                     cols = mets.cols)
+{
+  enrich.df <- read.csv(file = enrich.df.filepath) 
+
+
+  enrich.df <- enrich.df[order(enrich.df$Combined.Score, decreasing = T),]
+  enrich.df <- enrich.df[which(enrich.df$Adjusted.P.value < 0.05),]
+  
+  #if (nrow(enrich.df) > 50){enrich.df <- enrich.df[1:50, ]}
+
+  
+  ### To turn the enrichr protein names to genes
+  list1 <- list()
+  for (i in 1:nrow(enrich.df))
+    {
+      uppercase.genes <- strsplit(enrich.df$Genes[i], split = ";")
+      
+      for (j in 1:length(uppercase.genes[[1]]))
+      {
+        lower.case.name.half.tmp <- tolower(substring(uppercase.genes[[1]][j], 2))
+        full.format.name <- paste(substring(uppercase.genes[[1]][j], first = 1, last = 1), lower.case.name.half.tmp, sep = "")
+        list1[[paste(enrich.df$Term[i])]][j] <- full.format.name
+      }
+    }
+
+  if (print.list == T) {return(list1)}
+  
+##plotting loop
+for (plot.num in 1:length(list1))
+
+  {
+    genelist <- list1[[plot.num]]
+
+    # remove genes that are not in the sce
+    if (any(list1[[plot.num]] %in% rownames(sce) == FALSE) == TRUE)
+      {
+      genelist <- genelist[-which(list1[[plot.num]] %nin% rownames(sce))]
+      }
+      
+    tf.name <- gene.uppercase.to.lowercase.fun( strsplit(names(list1)[plot.num], split = " ")[[1]][1])
+
+    if (tf.name %in% genelist == T) {genelist <- genelist[-which(tf.name %in% genelist)]}
+    
+      
+    ysmooth <- predictSmooth(models = sce, gene = genelist, nPoints = 20)
+     
+    ymooth.spread <- spread(ysmooth, key = gene, value = yhat)
+    
+    ymooth.spread.l1.time <- ymooth.spread[1:20, 3:ncol(ymooth.spread)]
+    ymooth.spread.l2.time <- ymooth.spread[21:40, 3:ncol(ymooth.spread)]
+        
+    sderr.l1 <- rowSds(as.matrix(ymooth.spread.l1.time)) / sqrt(ncol(as.matrix(ymooth.spread.l1.time)))
+        
+    ymooth.spread.l1.mean <- data.frame(time = seq(1:20),
+                                        lineage = rep("Aged", 20), 
+                                        line.mean = rowMeans(ymooth.spread.l1.time),
+                                        
+                                        sderr = sderr.l1,
+                                        sd.high = rowMeans(ymooth.spread.l1.time) + sderr.l1,
+                                        sd.low = rowMeans(ymooth.spread.l1.time) - sderr.l1,
+                                        row.names = NULL)
+                            
+    
+    sderr.l2 <- rowSds(as.matrix(ymooth.spread.l2.time)) / sqrt(ncol(as.matrix(ymooth.spread.l2.time)))
+
+    ymooth.spread.l2.mean <- data.frame(time = seq(1:20),
+                                        lineage = rep("Young", 20), 
+                                        line.mean = rowMeans(ymooth.spread.l2.time),
+                                        
+                                        sderr = rowSds(as.matrix(ymooth.spread.l2.time)) / sderr.l2,
+                                        sd.high = rowMeans(ymooth.spread.l2.time) + sderr.l2,
+                                        sd.low = rowMeans(ymooth.spread.l2.time) - sderr.l2,
+                                        row.names = NULL)
+      
+    genes.l1.l2.means <-rbind(ymooth.spread.l1.mean, ymooth.spread.l2.mean)
+
+
+    if (ylab == T){
+      
+ 
+        print(   
+         ggplot(genes.l1.l2.means, aes(x = time, y = line.mean, color = lineage)) + 
+         geom_line(size = 2) + 
+         ggtitle(paste(names(list1[plot.num]), ':' , length(genelist), sep = "")) +
+         scale_fill_manual(values = c(mets.cols), breaks = c("Aged", "Young"))+
+         scale_color_manual(values = c(mets.cols),breaks = c("Aged", "Young"))+
+         geom_ribbon( aes(x = time, ymin = sd.low, ymax = sd.high, fill=lineage,), color = 'black',outline.type = "both", size = 0.1, alpha=0.5) + 
+         theme_classic()) 
+    }
+    
+    else(
+              print(   
+         ggplot(genes.l1.l2.means, aes(x = time, y = line.mean, color = lineage)) + 
+         geom_line(size = 2) + 
+         ggtitle(paste(names(list1[plot.num]), ':' , length(genelist), sep = "")) +
+         scale_fill_manual(values = c(mets.cols), breaks = c("Aged", "Young"))+
+         scale_color_manual(values = c(mets.cols),breaks = c("Aged", "Young"))+
+         geom_ribbon( aes(x = time, ymin = sd.low, ymax = sd.high, fill=lineage,), color = 'black',outline.type = "both", size = 0.1, alpha=0.5) + 
+         theme_classic() + 
+           theme(axis.text.y = element_blank()))
+    )
+  }
+}
+```
+
+```{r}
+load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/aged_young_injury_integrated_rpca_injury_dpi_umap_no_doublets.RData")
+
+umap.seurat.full <- aged.young.injury.integrated.rpca.injury.dpi.umap.no.doublets
+
+new.cluster.ids <- c("Immune", #0
+                     "Immune", #1
+                     "Immune", #2
+                     "Myonuclei", #3
+                     "Fibroblasts", #4
+                     "Fibroblasts",#5
+                     "Endothelial",#6
+                     "Fibroblasts", #7
+                     "Fibroblasts", #8
+                     "Myonuclei", #9
+                     "MuSCs" ,#10
+                     "Myonuclei", #11
+                     "Immune", #12
+                     "Myonuclei", #13
+                     "Fibroblasts", #14
+                     "MuSCs", #15
+                     "Immune", #16
+                      'Progenitors',#"MuSCs/progenitors", #17
+                     "SmoothMuscle", #18
+                     "Immune", #19
+                     "Immune", #20
+                     "Myonuclei", #21
+                     "Fibroblasts", #22
+                     "MuSCs", #23
+                     "Immune", #24
+                     "Progenitors", #25
+                     "Unidentified", #26
+                     "Endothelial", #27
+                     "Unidentified", #28
+                     "SmoothMuscle", #29
+                     "Fibroblasts", #30
+                     "Fibroblasts") #231
+
+names(new.cluster.ids) <- levels(umap.seurat.full)
+umap.seurat.full <- RenameIdents(umap.seurat.full, new.cluster.ids)
+  
+level.order <- c("Myonuclei", "Progenitors", "MuSCs", "Fibroblasts", 'Immune', "Endothelial", "SmoothMuscle", "Unidentified")
+levels(level.order) <- factor(c("Myonuclei", "Progenitors", "MuSCs", "Fibroblasts", 'Immune', "Endothelial", "SmoothMuscle", "Unidentified"))
+
+levels(umap.seurat.full) <- level.order
+
+```
+
+
+##### Branch1 and Branch2 overlap
+```{r}
+load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/sce_branch1_aged_young_FULL.RData")
+load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/sce_branch2_sub1_aged_young.RData")
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+branch1_archs4tf_TFs <- upstream.tf.plotting.fun(enrich.df.filepath =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/ARCHS4_TFs_Coexp_table_BRANCH1_updated.csv", 
+                                                 sce = sce.branch1.aged.young.FULL, print.list = T)
+
+branch2_archs4tf_TFs <- upstream.tf.plotting.fun(enrich.df.filepath =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/ARCHS4_TFs_Coexp_table_BRANCH2_updated.csv",
+                          sce = sce.branch2.sub1.aged.young, print.list = T)
+
+branch1.name.vec <- c()
+for (i in 1:length(names(branch1_archs4tf_TFs)[1:100]))
+{
+  tmp.name <- strsplit(names(branch1_archs4tf_TFs)[i], split = " ")[[1]][1]
+  branch1.name.vec[i] <- c(tmp.name)
+}
+
+branch2.name.vec <- c()
+for (i in 1:length(names(branch2_archs4tf_TFs)[1:100]))
+{
+  tmp.name <- strsplit(names(branch2_archs4tf_TFs)[i], split = " ")[[1]][1]
+  branch2.name.vec[i] <- c(tmp.name)
+}
+
+```
+
+```{r}
+# branch1.name.vec <- c()
+# for (i in 1:length(names(branch1_archs4tf_TFs)[1:100]))
+# {
+#   tmp.name <- strsplit(names(branch1_archs4tf_TFs)[i], split = " ")[[1]][1]
+#   branch1.name.vec[i] <- c(tmp.name)
+# }
+# 
+# branch2.name.vec <- c()
+# for (i in 1:length(names(branch2_archs4tf_TFs)[1:100]))
+# {
+#   tmp.name <- strsplit(names(branch2_archs4tf_TFs)[i], split = " ")[[1]][1]
+#   branch2.name.vec[i] <- c(tmp.name)
+# }
+# 
+# length(which(branch1.name.vec %in% branch2.name.vec))
+# branch1.name.vec[branch1.name.vec %nin% branch2.name.vec]
+# print("BRANCH2")
+# branch2.name.vec[branch2.name.vec %nin% branch1.name.vec]
+
+```
+
+### Intersection table - Branch2
+```{r}
+TF.branch.gene.list <- branch2_archs4tf_TFs
+
+dims <- 100
+interct.df.branch2 <- matrix(nrow = dims, ncol = dims)
+tf1.unique <- matrix(nrow = dims, ncol = dims)
+tf2.unique <- matrix(nrow = dims, ncol = dims)
+
+matrix.list <- list()
+
+new.names <- branch2.name.vec
+
+for (i in 1:dims)
+{
+  for (j in 1:ncol(interct.df.branch2))
+  {
+    tf1 <- new.names[i]
+    tf2 <- new.names[j]
+    
+    tf1.genes <- TF.branch.gene.list[grep(tf1, names(TF.branch.gene.list))][[1]]
+    tf2.genes <- TF.branch.gene.list[grep(tf2, names(TF.branch.gene.list))][[1]]
+
+    
+    # interct.df.branch2[i,j] <- length(which(tf1.genes %in% tf2.genes))
+    # tf1.unique[i,j] <- length(which(tf1.genes %nin% tf2.genes))
+    # tf2.unique[i,j] <- length(which(tf2.genes %nin% tf1.genes))
+    
+    ### Percentages
+    interct.df.branch2[i,j] <- (length(which(tf1.genes %in% tf2.genes)) / (length(which(tf1.genes %in% tf2.genes)) + 
+                                                                                     length(which(tf1.genes %nin% tf2.genes)) + 
+                                                                                     length(which(tf2.genes %nin% tf1.genes)))) * 100
+
+  }
+}
+rownames(interct.df.branch2) <- new.names
+colnames(interct.df.branch2) <- new.names
+
+
+```
+
+### Intersection table - Branch1
+```{r}
+TF.branch.gene.list <- branch1_archs4tf_TFs
+
+dims <- 100
+interct.df.branch1 <- matrix(nrow = dims, ncol = dims)
+# tf1.unique <- matrix(nrow = dims, ncol = dims)
+# tf2.unique <- matrix(nrow = dims, ncol = dims)
+
+new.names <- branch1.name.vec
+
+
+for (i in 1:dims)
+{
+  for (j in 1:dims)
+  {
+    tf1 <- new.names[i]
+    tf2 <- new.names[j]
+    
+    tf1.genes <- TF.branch.gene.list[grep(tf1, names(TF.branch.gene.list))][[1]]
+    tf2.genes <- TF.branch.gene.list[grep(tf2, names(TF.branch.gene.list))][[1]]
+
+    # raw numbers
+      # interct.df.clust.branch1[i,j] <- length(which(tf1.genes %in% tf2.genes))
+      # tf1.unique[i,j] <- length(which(tf1.genes %nin% tf2.genes))
+      # tf2.unique[i,j] <- length(which(tf2.genes %nin% tf1.genes))
+    
+    # percentages
+      interct.df.branch1[i,j] <- (length(which(tf1.genes %in% tf2.genes)) / (length(which(tf1.genes %in% tf2.genes)) + 
+                                                                                     length(which(tf1.genes %nin% tf2.genes)) + 
+                                                                                     length(which(tf2.genes %nin% tf1.genes)))) * 100
+
+  }
+}
+rownames(interct.df.branch1) <- new.names
+colnames(interct.df.branch1) <- new.names
+
+```
+
+### intersection table branch2
+```{r}
+TF.branch.gene.list <- branch2_archs4tf_TFs
+
+dims <- 100
+interct.df.branch2 <- matrix(nrow = dims, ncol = dims)
+tf1.unique <- matrix(nrow = dims, ncol = dims)
+tf2.unique <- matrix(nrow = dims, ncol = dims)
+
+matrix.list <- list()
+
+new.names <- branch2.name.vec
+
+for (i in 1:dims)
+{
+  for (j in 1:ncol(interct.df.branch2))
+  {
+    tf1 <- new.names[i]
+    tf2 <- new.names[j]
+    
+    tf1.genes <- TF.branch.gene.list[grep(tf1, names(TF.branch.gene.list))][[1]]
+    tf2.genes <- TF.branch.gene.list[grep(tf2, names(TF.branch.gene.list))][[1]]
+
+    
+    # interct.df.branch2[i,j] <- length(which(tf1.genes %in% tf2.genes))
+    # tf1.unique[i,j] <- length(which(tf1.genes %nin% tf2.genes))
+    # tf2.unique[i,j] <- length(which(tf2.genes %nin% tf1.genes))
+    
+    ### Percentages
+    interct.df.branch2[i,j] <- (length(which(tf1.genes %in% tf2.genes)) / (length(which(tf1.genes %in% tf2.genes)) + 
+                                                                                     length(which(tf1.genes %nin% tf2.genes)) + 
+                                                                                     length(which(tf2.genes %nin% tf1.genes)))) * 100
+
+  }
+}
+rownames(interct.df.branch2) <- new.names
+colnames(interct.df.branch2) <- new.names
+
+
+```
+
+
+### RUN HERE ^^^
+
+# plot directory
+```{r}
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+mets.cols <- c( '#FF5910', '#002D72')
+```
+
+
+# Fig 1 - sueart UMAPs
+
+### Full un-subsetted 
+```{r}
+load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/aged_young_injury_integrated_rpca_injury_dpi_umap_no_doublets.RData")
+DimPlot(aged.young.injury.integrated.rpca.injury.dpi.umap.no.doublets)
+exploratory.genelist <- c("Pax7", "Ttn", "Neb", "Pdgfra", "Pecam1", "Cd74", "Pecam1", "Dcn", "Myh1", "Myh4", "Myh2", "Myh3", "Myh8", 'Cd74', "Myog", "Myod1", "Cacna1a", 'Stat4' )
+FeaturePlot(aged.young.injury.integrated.rpca.injury.dpi.umap.no.doublets, features = exploratory.genelist)
+```
+
+```{r}
+genelist <- c()
+FeaturePlot(aged.young.injury.integrated.rpca.injury.dpi.umap.no.doublets, features = exploratory.genelist)
+
+```
+
+### Fuull un-subsetted condition and injury.dpi
+```{r}
+# pbuild <- DimPlot(aged.young.injury.integrated.rpca.injury.dpi.umap.no.doublets, group.by = 'condition.id')
+pbuild <- DimPlot(aged.young.injury.integrated.rpca.injury.dpi.umap.no.doublets, group.by = 'injury.dpi')
+
+
+# UmapCDS2 <- data.frame(dim1 = pbuild$data$UMAP_1, 
+#                        dim2 = pbuild$data$UMAP_2,
+#                        condition.id = pbuild$data$condition.id)
+
+UmapCDS2 <- data.frame(dim1 = pbuild$data$UMAP_1, 
+                       dim2 = pbuild$data$UMAP_2,
+                       injury.dpi = pbuild$data$injury.dpi)
+
+plot <- UmapCDS2
+
+plot.shuffled <- plot[sample(1:nrow(plot)), ]
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+pdf(file = paste(dir1, 'injury_dpi_UMAP', '.pdf', sep = "") ,width = 2.3, height = 1.8)
+
+size = 8
+ggplot(plot.shuffled, aes(x = dim1, y = dim2)) + geom_point(aes(fill = injury.dpi ), stroke = .05, shape = 21, size = 2, alpha = 0.9, color = "gray21") + theme_classic() +
+  theme(axis.text.x = element_text(size = size)) +
+  theme(axis.text.y = element_text(size = size)) +
+  theme(axis.title.x = element_text(size = size)) +
+  theme(axis.title.y = element_text(size = size)) + 
+  theme(legend.text=element_text(size=size)) +
+  theme(legend.title=element_text(size=size)) +
+  xlab("component 1") + ylab("component 2") + 
+  labs(fill = "injury.dpi")
+  #guides(fill=guide_legend(title="Pseudotime"))
+
+
+dev.off()
+```
+
+### Fig 1 --- plotting full umap --- good dimensions ALMOST right -- look lower for actual plot used with correct alphas
+```{r}
+
+
+umap.seurat.full <- aged.young.injury.integrated.rpca.injury.dpi.umap.no.doublets
+
+new.cluster.ids <- c("Immune", #0
+                     "Immune", #1
+                     "Immune", #2
+                     "Myonuclei", #3
+                     "Fibroblasts", #4
+                     "Fibroblasts",#5
+                     "Endothelial",#6
+                     "Fibroblasts", #7
+                     "Fibroblasts", #8
+                     "Myonuclei", #9
+                     "MuSCs" ,#10
+                     "Myonuclei", #11
+                     "Immune", #12
+                     "Myonuclei", #13
+                     "Fibroblasts", #14
+                     "MuSCs", #15
+                     "Immune", #16
+                      'Progenitors',#"MuSCs/progenitors", #17
+                     "SmoothMuscle", #18
+                     "Immune", #19
+                     "Immune", #20
+                     "Myonuclei", #21
+                     "Fibroblasts", #22
+                     "MuSCs", #23
+                     "Immune", #24
+                     "Progenitors", #25
+                     "Unidentified", #26
+                     "Endothelial", #27
+                     "Unidentified", #28
+                     "SmoothMuscle", #29
+                     "Fibroblasts", #30
+                     "Fibroblasts") #231
+
+names(new.cluster.ids) <- levels(umap.seurat.full)
+umap.seurat.full <- RenameIdents(umap.seurat.full, new.cluster.ids)
+  
+level.order <- c("Myonuclei", "Progenitors", "MuSCs", "Fibroblasts", 'Immune', "Endothelial", "SmoothMuscle", "Unidentified")
+levels(level.order) <- factor(c("Myonuclei", "Progenitors", "MuSCs", "Fibroblasts", 'Immune', "Endothelial", "SmoothMuscle", "Unidentified"))
+
+levels(umap.seurat.full) <- level.order
+
+#col.vec <- c("firebrick", "darkgoldenrod1", "forestgreen", "blue", "chocolate1", "black", "gray48")
+
+text.size = 30
+cols <- brewer.pal(n=8,"Set1")
+cols[2] <- 'cyan2' 
+cols[5] <- 'deepskyblue4' 
+
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+pdf(file = paste(dir1, '/full_unsubsetted_umap.pdf', sep = "") ,width = 3.5, height = 2)
+
+
+size = 8
+
+
+DimPlot(umap.seurat.full, pt.size = .8, label = F) + 
+      theme_classic() + 
+  scale_color_manual(values = cols)+
+  xlab("UMAP1") + 
+  ylab("UMAP2") + 
+    theme(axis.title.x = element_text(size = size)) +     
+    theme(axis.text.y = element_text(size = size)) +
+    theme(axis.title.y = element_text(size = size, 
+                                      margin = margin(t = 0, r = 0, b = 0, l = -8))) + 
+    theme(plot.title=element_blank()) +
+    
+  theme(legend.text=element_text(size=size),
+          legend.title=element_text(size = size),
+          legend.key.size = unit(.25, "cm"),
+          legend.margin=margin(0,0,0,0),
+          legend.box.margin=margin(0,0,0,-5)) +
+    
+    theme(plot.margin = margin(t = -17.5,  # Top margin
+                             r = 3,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 4)) # Left margin
+dev.off()
+```
+
+```{r}
+display.brewer.all()
+brewer.pal(n=8,"Set1")
+```
+
+# Fig1 - vlnplots -- full umap
+```{r}
+pdf( file = paste(dir1, 'vlnplots_umap_full.pdf', sep = "") ,width = 5.8, height = 13)
+
+colors.to.use <- cols
+pt.size.obj <- 0
+
+DefaultAssay(umap.seurat.full) <- "RNA"
+p1 <- VlnPlot(umap.seurat.full, features = "Neb", pt.size = pt.size.obj, cols = colors.to.use) + ylab(NULL) +NoLegend() + xlab(NULL) + theme(axis.text.x=element_blank()) +ggtitle(NULL)
+p2 <- VlnPlot(umap.seurat.full, features = "Myog",  pt.size = pt.size.obj, cols = colors.to.use)+ ylab(NULL)+NoLegend() + xlab(NULL)+ theme(axis.text.x=element_blank()) +ggtitle(NULL)
+p3 <- VlnPlot(umap.seurat.full, features = "Pax7", pt.size = pt.size.obj, cols = colors.to.use) + ylab(NULL)+NoLegend() + xlab(NULL)+ theme(axis.text.x=element_blank()) +ggtitle(NULL)
+p4 <- VlnPlot(umap.seurat.full, features = "Dcn",  pt.size = pt.size.obj, cols = colors.to.use)+ ylab(NULL)+NoLegend() + xlab(NULL)+ theme(axis.text.x=element_blank()) +ggtitle(NULL)
+p5 <- VlnPlot(umap.seurat.full, features = "Cd74",  pt.size = pt.size.obj, cols = colors.to.use)+ ylab(NULL)+NoLegend() + xlab(NULL)+ theme(axis.text.x=element_blank()) +ggtitle(NULL)
+p6 <- VlnPlot(umap.seurat.full, features = "Pecam1",  pt.size = pt.size.obj, cols = colors.to.use)+ ylab(NULL)+NoLegend() + xlab(NULL)+ theme(axis.text.x=element_blank()) +ggtitle(NULL)
+#p7 <- VlnPlot(umap.seurat.full, features = "Myo1b",  pt.size = pt.size.obj, cols = colors.to.use)+ ylab(NULL)+NoLegend() + xlab(NULL)+ theme(axis.text.x=element_blank()) +ggtitle(NULL)
+p7 <- VlnPlot(umap.seurat.full, features = "Rgs5",  pt.size = pt.size.obj, cols = colors.to.use)+ ylab(NULL)+NoLegend() + xlab(NULL)+ theme(axis.text.x=element_blank()) +ggtitle(NULL)
+
+#p8 <- VlnPlot(umap.seurat.full, features = "Pdgfra",  pt.size = pt.size.obj, cols = colors.to.use)+ ylab(NULL)+NoLegend() + xlab(NULL)+ theme(axis.text.x=element_blank()) +ggtitle(NULL)
+
+
+#grid.arrange(p1, p2, p3, p4, p5, p6, p7, ncol = 1 )
+
+
+
+
+
+plot_grid(p1, p2, p3, p4, p5, p6, p7, ncol=1, align="v")
+
+rm(p1, p2, p3, p4, p5, p6, p7)
+dev.off()
+```
+
+
+```{r}
+unknown.markeres1 <- FindMarkers(umap.seurat.full, ident.1 = "Immune?")
+unknown.markeres1 %>% top_n(wt = avg_log2FC, n = 100)
+
+smoothmuscle.tmp <- FindMarkers(umap.seurat.full, ident.1 = "SmoothMuscle")
+smoothmuscle.tmp %>% top_n(wt = avg_log2FC, n = 100)
+
+```
+
+# Subsetting
+```{r}
+myogenic.subset.umap.no.doublets <- subset(aged.young.injury.integrated.rpca.injury.dpi.umap.no.doublets, Pax7 > 0 | Myod1 > 0 | Myog > 0 | Ckm > 0 | Mylk2 > 0)
+
+myogenic.subset.umap.no.doublets <- subset(x = myogenic.subset.umap.no.doublets, Cd74 > 0 | Pecam1 > 0, invert = T)
+
+myogenic.subset.umap.no.doublets <- subset(myogenic.subset.umap.no.doublets, idents = c(0, 1, 2, 19, 6, 27, 29), invert = T)
+
+DimPlot(myogenic.subset.umap.no.doublets)
+
+myogenic.subset.umap.no.doublets.renamed <- myogenic.subset.umap.no.doublets
+
+new.cluster.ids <- c(#"Myonuclei", #0
+                     #"Myonuclei", #1
+                     #"Myonuclei", #2
+                     "Myonuclei", #3
+                     "FAPs", #4
+                     "FAPs",#5
+                     #"",#6
+                     "FAPs", #7
+                     "FAPs", #8
+                     "Myonuclei", #9
+                     "MuSCs" ,#10
+                     "Myonuclei", #11
+                     "SmoothMuscle", #12
+                     "Myonuclei", #13
+                     "FAPs", #14
+                     "MuSCs", #15
+                     "Immune?", #16
+                     "progenitors/immature_myonuclei", #17
+                     "SmoothMuscle", #18
+                     #"", #19
+                     "Immune?", #20
+                     "Myonuclei", #21
+                     "FAPs", #22
+                     "?", #23
+                     "Immune?", #24
+                     "progenitors", #25
+                     "Schwann", #26
+                     #"", #27
+                     "MuSCs?", #28
+                     #"", #29
+                     "FAPs", #30
+                     "FAPs") #231
+
+#levels(myogenic.subset.umap.no.doublets.renamed) <- myogenic.subset.umap.no.doublets.renamed$seurat_clusters
+
+myogenic.subset.umap.no.doublets.renamed <- SetIdent(myogenic.subset.umap.no.doublets.renamed, value = 'seurat_clusters')
+names(new.cluster.ids) <- levels(myogenic.subset.umap.no.doublets.renamed)
+myogenic.subset.umap.no.doublets.renamed <- RenameIdents(myogenic.subset.umap.no.doublets.renamed, new.cluster.ids)
+myogenic.subset.umap.no.doublets.renamed$celltype.seurat <- Idents(myogenic.subset.umap.no.doublets.renamed)
+
+DimPlot(myogenic.subset.umap.no.doublets.renamed)
+
+myogenic.subset2.umap.no.doublets.renamed <- subset(myogenic.subset.umap.no.doublets.renamed, idents = c("Schwann", "SmoothMuscle", "Immune?"), invert = TRUE)
+
+```
+
+### DO MORE SUBSETTING (subsetting #2) - remove schwann cells and smooth muscle and cluster again
+```{r}
+myogenic.subset2.umap.no.doublets.renamed <- SetIdent(myogenic.subset.umap.no.doublets.renamed, value = 'celltype.seurat') 
+myogenic.subset2.umap.no.doublets.renamed <- subset(myogenic.subset.umap.no.doublets.renamed, idents = c("Schwann", "SmoothMuscle", "Immune?"), invert = TRUE)
+#myogenic.subset2.umap.no.doublets.renamed.noFAPS <- myogenic.subset2.umap.no.doublets.renamed %>% subset(idents = "FAPs", invert = T)
+
+```
+
+### UMAP of subsetted #2 object
+```{r}
+dims = 1:15 # 15 looks good
+min.dist = 0.05
+n.neighbors = 100 # changed from 200
+npcs = 30
+resolution = 0.8 # increased from 0.2 to try to segregate MuSCs
+algorithim = 1
+
+
+
+  DefaultAssay(myogenic.subset2.umap.no.doublets.renamed) <- "integrated"
+  myogenic.subset2.umap.no.doublets.renamed <- ScaleData(myogenic.subset2.umap.no.doublets.renamed, verbose = FALSE)
+  myogenic.subset2.umap.no.doublets.renamed <- RunPCA(myogenic.subset2.umap.no.doublets.renamed, npcs = npcs, verbose = FALSE)
+  myogenic.subset2.umap.no.doublets.renamed <- RunUMAP(myogenic.subset2.umap.no.doublets.renamed, reduction = "pca",  
+                                    n.neighbors = n.neighbors, 
+                                    min.dist = min.dist, 
+                                    dims = dims) 
+  myogenic.subset2.umap.no.doublets.renamed <- FindNeighbors(myogenic.subset2.umap.no.doublets.renamed)
+  myogenic.subset2.umap.no.doublets.renamed <<- FindClusters(myogenic.subset2.umap.no.doublets.renamed, resolution = resolution, algorithim = algorithim)
+
+  DefaultAssay(myogenic.subset2.umap.no.doublets.renamed) <- "RNA"
+  myogenic.subset2.umap.no.doublets.renamed <- SetIdent(myogenic.subset2.umap.no.doublets.renamed, value = 'celltype.seurat')
+  
+  myogenic.subset2.umap.no.doublets.renamed.noFAPS <- myogenic.subset2.umap.no.doublets.renamed %>% subset(idents = "FAPs", invert = T)
+
+
+  #aged.young.injury.integrated.rpca.injury.dpi.umap <- rpca2.umap
+
+DimPlot(myogenic.subset2.umap.no.doublets.renamed.noFAPS, pt.size = 1, label = T)
+DimPlot(myogenic.subset2.umap.no.doublets.renamed.noFAPS, pt.size = 1, label = T, group.by = 'cell.id')
+DimPlot(myogenic.subset2.umap.no.doublets.renamed.noFAPS, pt.size = 1, label = T, group.by = 'doublet')
+DimPlot(myogenic.subset2.umap.no.doublets.renamed.noFAPS, pt.size = 1, label = T, group.by = 'condition.id')
+DimPlot(myogenic.subset2.umap.no.doublets.renamed.noFAPS, pt.size = 1, label = T, group.by = 'injury.dpi')
+DimPlot(myogenic.subset2.umap.no.doublets.renamed.noFAPS, pt.size = 1, label = T, group.by = 'replicate.number')
+
+
+exploratory.genelist <- c("Pax7", "Ttn", "Neb", "Pdgfra", "Pecam1", "Ache", "Chrna1", "Col22a1", "Myh1", "Myh4", "Myh2", "Myh3", "Myh8", 'Cd74')
+FeaturePlot(myogenic.subset2.umap.no.doublets.renamed.noFAPS, features = exploratory.genelist)
+
+```
+### Featureplot grid FIg S1 -- dimensions
+```{r}
+# 3 x 6 grid 
+#genelist <- c("Pax7", "Ttn", "Neb", "Pdgfra", "Pecam1", "Cd74", "Pecam1", "Dcn", "Myh1", "Myh4", "Myh2", "Myh3", "Myh8", 'Cd74', "Myog", "Myod1", "Cacna1a", 'Stat4' )
+genelist <- c("Pax7", 'Myod1', 'Myog', 'Ttn', "Neb", 'Myh1', 'Myh2', 'Myh4', 'Myh3', "Myh8", 'Pdgfra', 'Dcn', 'Pecam1', 'Cacna1c', 'Stat4', 'Cd74')
+
+genelist <- unique(genelist)
+
+unit.size <- .3
+text.size <- 5.9
+
+p1 <- list()
+for (i in 1:length(genelist))
+{
+
+  p1[[i]] <- FeaturePlot(umap.seurat.full, features = genelist[i]) + 
+    theme(axis.text=element_blank(),
+          axis.title = element_blank(),
+              legend.position = 'right',
+              legend.key.size = unit(unit.size, 'cm'), #change legend key size
+              legend.key.height = unit(unit.size-.1, 'cm'), #change legend key height
+              legend.key.width = unit(unit.size, 'cm'), #change legend key width
+              legend.title = element_text(size=text.size), #change legend title font size
+              legend.text = element_text(size=text.size), #change legend text font size
+              legend.margin=margin(0,0,0,0),
+              legend.box.margin=margin(-10,-10, r = 0, l = -10),
+          plot.title = element_text(size= 10))
+}
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+pdf(file = paste(dir1, 'featureplot_grid_S1', '.pdf', sep = "") ,width = 7, height = 4)
+
+grid.arrange(grobs = p1[1:length(genelist)], nrow = 3)
+
+dev.off()
+
+```
+### Figure S1 UMAP plots  -- condition.id
+```{r}
+
+pbuild <- DimPlot(umap.seurat.full, group.by = 'condition.id')
+UmapCDS2 <- data.frame(dim1 = pbuild$data$UMAP_1, 
+                        dim2 = pbuild$data$UMAP_2,
+                        condition.id = pbuild$data$condition.id)
+plot <- UmapCDS2
+plot.shuffled <- plot[sample(1:nrow(plot)), ]
+
+text.size = 8
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+pdf(file = paste(dir1, 'young_aged_UMAP_S1', '.pdf', sep = "") ,width = 3.2, height = 2.1)
+
+ggplot(plot.shuffled, aes(x = dim1, y = dim2)) + geom_point(aes(fill = condition.id ), stroke = .2, shape = 21, size = 2, alpha = 0.6, color = "gray21") + scale_fill_manual(values = mets.cols) + 
+  theme_classic() +
+  theme(axis.title = element_blank()) +
+  theme(legend.position = 'none') 
+
+dev.off()
+
+```
+
+
+### Figure S1 UMAP plots-- injury.dpi
+```{r}
+
+pbuild <- DimPlot(umap.seurat.full, group.by = 'injury.dpi')
+UmapCDS2 <- data.frame(dim1 = pbuild$data$UMAP_1, 
+                        dim2 = pbuild$data$UMAP_2,
+                        injury.dpi = pbuild$data$injury.dpi)
+plot <- UmapCDS2
+plot.shuffled <- plot[sample(1:nrow(plot)), ]
+
+text.size = 8
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+pdf(file = paste(dir1, 'injury_dpi_UMAP_S1', '.pdf', sep = "") ,width = 3.2, height = 2.1)
+
+ggplot(plot.shuffled, aes(x = dim1, y = dim2)) + geom_point(aes(fill = injury.dpi ), stroke = .2, shape = 21, size = 2, alpha = 0.6, color = "gray21") + 
+  theme_classic() +
+  theme(axis.title = element_blank()) +
+  theme(legend.position = 'none') 
+
+dev.off()
+```
+
+### Fig 1C -- dimensions
+```{r}
+
+pbuild <- DimPlot(umap.seurat.full) ## idents are celltype
+UmapCDS2 <- data.frame(dim1 = pbuild$data$UMAP_1, 
+                        dim2 = pbuild$data$UMAP_2,
+                        injury.dpi = Idents(umap.seurat.full))
+plot <- UmapCDS2
+plot.shuffled <- plot[sample(1:nrow(plot)), ]
+
+text.size = 8
+cols <- brewer.pal(n=8,"Set1")
+cols[2] <- 'cyan2' 
+cols[5] <- 'deepskyblue4' 
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+pdf(file = paste(dir1, 'full_UMAP_Fig1', '.pdf', sep = "") ,width = 3.2, height = 2.1)
+
+ggplot(plot.shuffled, aes(x = dim1, y = dim2)) + geom_point(aes(fill = injury.dpi ), stroke = .2, shape = 21, size = 2, alpha = 0.6, color = "gray21") + 
+  scale_fill_manual(values = cols) + 
+  theme_classic() +
+  theme(axis.title = element_blank()) +
+  theme(legend.position = 'none') 
+
+dev.off()
+```
+
+### myogenic.subset.final -- Fig 1 Fig1 plotting
+```{r}
+myogenic.subset.final <- SetIdent(myogenic.subset2.umap.no.doublets.renamed.noFAPS, value = 'celltype.seurat')
+new.cluster.ids <- c('Myonuclei',
+                     'MuSCs', 
+                     'Progenitors',
+                     'Progenitors',
+                     'Progenitors', 
+                     'MuSCs')
+
+#levels(myogenic.subset.umap.no.doublets.renamed) <- myogenic.subset.umap.no.doublets.renamed$seurat_clusters
+
+#myogenic.subset2.umap.no.doublets.renamed.noFAPS <- SetIdent(myogenic.subset2.umap.no.doublets.renamed.noFAPS, value = 'seurat_clusters')
+names(new.cluster.ids) <- levels(myogenic.subset.final)
+myogenic.subset.final <- RenameIdents(myogenic.subset.final, new.cluster.ids)
+myogenic.subset.final$celltype.seurat <- Idents(myogenic.subset.final)
+
+DimPlot(myogenic.subset.final, group.by = 'celltype.seurat')+ theme_classic()  + theme(axis.text.x = element_text(size = text.size)) +     
+                                                               theme(axis.text.y = element_text(size = text.size)) +
+                                                               theme(axis.title.x = element_text(size = text.size)) +
+                                                              theme(axis.title.y = element_text(size = text.size)) + theme(legend.text=element_text(size=30))
+ #+ scale_color_manual(values = c("#377EB8", 'chocolate1', 'coral'))
+
+
+# save(myogenic.subset.final, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/myogenic_subset_final.RData")
+```
+
+### Fig 1F -- dimensions
+```{r}
+pbuild <- DimPlot(myogenic.subset.final, group.by = 'condition.id')
+UmapCDS2 <- data.frame(dim1 = pbuild$data$UMAP_1, 
+                        dim2 = pbuild$data$UMAP_2,
+                        condition.id = pbuild$data$condition.id)
+plot <- UmapCDS2
+plot.shuffled <- plot[sample(1:nrow(plot)), ]
+
+text.size = 8
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+pdf(file = paste(dir1, 'myogenic_subset_umap_conditionid', '.pdf', sep = "") ,width = 3.2, height = 2.1)
+
+ggplot(plot.shuffled, aes(x = dim1, y = dim2)) + geom_point(aes(fill = condition.id ), stroke = .2, shape = 21, size = 2, alpha = 0.6, color = "gray21") + scale_fill_manual(values = mets.cols) + 
+  theme_classic() +
+  theme(axis.title = element_blank()) +
+  theme(legend.position = 'none') 
+
+dev.off()
+
+```
+
+### Fig 1E -- dimensions
+```{r}
+pbuild <- DimPlot(myogenic.subset.final, group.by = 'celltype.seurat')
+UmapCDS2 <- data.frame(dim1 = pbuild$data$UMAP_1, 
+                        dim2 = pbuild$data$UMAP_2,
+                        condition.id = pbuild$data$celltype.seurat)
+plot <- UmapCDS2
+plot.shuffled <- plot[sample(1:nrow(plot)), ]
+
+text.size = 8
+cols <- brewer.pal(n=8,"Set1")
+cols[2] <- 'cyan2' 
+cols[5] <- 'deepskyblue4' 
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+pdf(file = paste(dir1, 'myogenic_subset_umap_celltype', '.pdf', sep = "") ,width = 3.2, height = 2.1)
+
+ggplot(plot.shuffled, aes(x = dim1, y = dim2)) + geom_point(aes(fill = condition.id ), stroke = .2, shape = 21, size = 2, alpha = 0.6, color = "gray21") + 
+  scale_fill_manual(values = cols[1:3]) + 
+  theme_classic() +
+  theme(axis.title = element_blank()) +
+  theme(legend.position = 'none') 
+
+dev.off()
+
+```
+
+### Fig 1G -- dimensions
+```{r}
+pbuild <- DimPlot(myogenic.subset.final, group.by = 'injury.dpi')
+UmapCDS2 <- data.frame(dim1 = pbuild$data$UMAP_1, 
+                        dim2 = pbuild$data$UMAP_2,
+                        condition.id = pbuild$data$injury.dpi)
+plot <- UmapCDS2
+plot.shuffled <- plot[sample(1:nrow(plot)), ]
+
+text.size = 8
+
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+pdf(file = paste(dir1, 'myogenic_subset_umap_injurydpi', '.pdf', sep = "") ,width = 3.2, height = 2.1)
+
+ggplot(plot.shuffled, aes(x = dim1, y = dim2)) + geom_point(aes(fill = condition.id ), stroke = .2, shape = 21, size = 2, alpha = 0.6, color = "gray21") + 
+  theme_classic() +
+  theme(axis.title = element_blank()) +
+  theme(legend.position = 'none') 
+
+dev.off()
+
+```
+# Fig1 - plotting myogenic subset -- dimensions 
+```{r}
+
+
+
+# DimPlot(myogenic.subset.final, group.by = 'celltype.seurat')+ theme_classic()  + scale_color_manual(values = cols[1:3]) + 
+#                                                               theme(axis.text.x = element_text(size = text.size)) +     
+#                                                                theme(axis.text.y = element_text(size = text.size)) +
+#                                                                theme(axis.title.x = element_text(size = text.size)) +
+#                                                               theme(axis.title.y = element_text(size = text.size)) + theme(legend.text=element_text(size=30))
+# 
+# 
+# 
+
+
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+pdf(file = paste(dir1, 'myogenic_subset_celltype.pdf', sep = "") ,width = 3.3, height = 2)
+
+
+size = 8
+
+
+DimPlot(myogenic.subset.final, pt.size = 0.4, group.by = 'celltype.seurat') + 
+  theme_classic() + 
+  scale_color_manual(values = cols[1:3])+
+  xlab("UMAP1") + 
+  ylab("UMAP2") + 
+    theme(axis.title.x = element_text(size = size)) +     
+    theme(axis.text.y = element_text(size = size)) +
+    theme(axis.title.y = element_text(size = size, 
+                                      margin = margin(t = 0, r = 0, b = 0, l = -8))) + 
+    theme(plot.title=element_blank()) +
+    
+  theme(legend.text=element_text(size=size),
+          legend.title=element_text(size = size),
+          legend.key.size = unit(.25, "cm"),
+          legend.margin=margin(0,0,0,0),
+          legend.box.margin=margin(0,0,0,-5)) +
+    
+    theme(plot.margin = margin(t = -17.5,  # Top margin
+                             r = 3,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 4)) # Left margin
+
+dev.off()
+
+```
+
+### Fig1 condition.id myogenic subset -- dimensions
+```{r}
+updated.seurat <- SetIdent(updated.seurat, value = 'condition.id')
+new.cluster.ids <- c('Young', "Aged")
+names(new.cluster.ids) <- levels(updated.seurat)
+updated.seurat <- RenameIdents(updated.seurat, new.cluster.ids)
+
+#updated.seurat <- SetIdent(updated.seurat, value = 'condition.id')
+level.order <- c('Young', "Aged")
+levels(level.order) <- factor(c('Young', "Aged"))
+
+levels(updated.seurat) <- level.order
+
+my_levels <-c('Young', "Aged")
+updated.seurat$condition.id <- factor(x = updated.seurat$condition.id, levels = my_levels)
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+pdf(file = paste(dir1, 'myogenic_subset_condition_id.pdf', sep = "") ,width = 3.05, height = 2)
+
+
+size = 8
+
+DimPlot(myogenic.subset.final, group.by = 'condition.id', pt.size = 0.4) + scale_color_manual(values = mets.cols) + 
+  theme_classic() + 
+  xlab("UMAP1") + 
+  ylab("UMAP2") + 
+    theme(axis.title.x = element_text(size = size)) +     
+    theme(axis.text.y = element_text(size = size)) +
+    theme(axis.title.y = element_text(size = size, 
+                                      margin = margin(t = 0, r = 0, b = 0, l = -8))) + 
+    theme(plot.title=element_blank()) +
+    
+  theme(legend.text=element_text(size=size),
+          legend.title=element_text(size = size),
+          legend.key.size = unit(.25, "cm"),
+          legend.margin=margin(0,0,0,0),
+          legend.box.margin=margin(0,0,0,-5)) +
+    
+    theme(plot.margin = margin(t = -17.5,  # Top margin
+                             r = 3,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 4)) # Left margin
+
+
+dev.off()
+```
+
+```{r}
+pdf(file = paste(dir1, 'myogenic_subset_injury.dpi.pdf', sep = "") ,width = 3, height = 2)
+
+pbuild <- DimPlot(myogenic.subset.final, group.by = 'injury.dpi')
+
+
+UmapCDS2 <- data.frame(dim1 = pbuild$data$UMAP_1, 
+                       dim2 = pbuild$data$UMAP_2,
+                       injury.dpi = pbuild$data$injury.dpi)
+
+plot <- UmapCDS2
+
+plot.shuffled <- plot[sample(1:nrow(plot)), ]
+
+size = 8
+
+# ggplot(plot.shuffled, aes(x = dim1, y = dim2)) + geom_point(aes(fill = injury.dpi ), stroke = .05, shape = 21, size = 1.5, alpha = 0.9, color = "gray21") + 
+#   scale_color_brewer(palette = "Accent") + theme_classic() +
+#   theme_classic() + 
+#   xlab("UMAP1") + 
+#   ylab("UMAP2") + 
+#     theme(axis.title.x = element_text(size = size)) +     
+#     theme(axis.text.y = element_text(size = size)) +
+#     theme(axis.title.y = element_text(size = size, 
+#                                       margin = margin(t = 0, r = 0, b = 0, l = -8))) + 
+#     theme(plot.title=element_blank()) +
+#     
+#   theme(legend.text=element_text(size=size),
+#           legend.title=element_blank(),
+#           legend.key.size = unit(.25, "cm"),
+#           legend.margin=margin(0,0,0,0),
+#           legend.box.margin=margin(0,0,0,-5)) + 
+#     
+#     theme(plot.margin = margin(t = -17.5,  # Top margin
+#                              r = 3,  # Right margin
+#                              b = 0,  # Bottom margin
+#                              l = 0)) # Left margin
+# 
+# 
+# dev.off()
+
+DimPlot(myogenic.subset.final, group.by = 'injury.dpi', pt.size = 0.4) +
+  theme_classic() + 
+  xlab("UMAP1") + 
+  ylab("UMAP2") + 
+    theme(axis.title.x = element_text(size = size)) +     
+    theme(axis.text.y = element_text(size = size)) +
+    theme(axis.title.y = element_text(size = size, 
+                                      margin = margin(t = 0, r = 0, b = 0, l = -8))) + 
+    theme(plot.title=element_blank()) +
+    
+  theme(legend.text=element_text(size=size),
+          legend.title=element_text(size = size),
+          legend.key.size = unit(.25, "cm"),
+          legend.margin=margin(0,0,0,0),
+          legend.box.margin=margin(0,0,0,-5)) +
+    
+    theme(plot.margin = margin(t = -17.5,  # Top margin
+                             r = 3,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 4)) # Left margin
+
+
+dev.off()
+```
+
+```{r}
+pax7, myog, Ttn, neb, myh1, myh4, myh3, myh8, pecam1, cd74, Stat4, Dcn
+```
+
+### FigS2 ---- violin vlnplots
+```{r}
+new.cluster.ids <- c('Young', "Aged")
+names(new.cluster.ids) <- levels(updated.seurat)
+updated.seurat <- RenameIdents(updated.seurat, new.cluster.ids)
+
+updated.seurat <- SetIdent(updated.seurat, value = 'condition.id')
+level.order <- c('Young', "Aged")
+levels(level.order) <- factor(c('Young', "Aged"))
+
+levels(updated.seurat) <- level.order
+
+my_levels <-c('Young', "Aged")
+updated.seurat$condition.id <- factor(x = updated.seurat$condition.id, levels = my_levels)
+
+
+VlnPlot(updated.seurat %>% subset(subset = injury.dpi == '4dpi'), features = c('Fgfr1', 'Fgfr4', 'Notch3', 'Ttn', 'Neb', 'Actn2'), group.by = 'condition.id', pt.size = 0, cols = rev(mets.cols)) & 
+  theme(axis.title.y = element_blank()) & 
+  theme(axis.title.x = element_blank())
+
+VlnPlot(updated.seurat %>% subset(subset = injury.dpi == '4dpi'), features = c('Six1', 'Runx1', 'Sox6', 'Ttn', 'Neb', 'Actn2'), group.by = 'condition.id', pt.size = 0, cols = rev(mets.cols)) & 
+  theme(axis.title.y = element_blank()) & 
+  theme(axis.title.x = element_blank())
+
+VlnPlot(updated.seurat %>% subset(subset = injury.dpi == '7dpi'), features = c('Fgfr1', 'Fgfr4', 'Notch3', 'Ttn', 'Neb', 'Actn2'), group.by = 'condition.id', pt.size = 0, cols = rev(mets.cols)) & 
+  theme(axis.title.y = element_blank()) & 
+  theme(axis.title.x = element_blank())
+
+VlnPlot(updated.seurat %>% subset(subset = injury.dpi == '7dpi'), features = c('Six1', 'Runx1', 'Sox6', 'Ttn', 'Neb', 'Actn2'), group.by = 'condition.id', pt.size = 0, cols = rev(mets.cols)) & 
+  theme(axis.title.y = element_blank()) & 
+  theme(axis.title.x = element_blank())
+
+
+#VlnPlot(updated.seurat %>% subset(subset = injury.dpi == c("4dpi", "7dpi")), features = c("Myog", "Myod1", 'Ckm', 'Pax7'), group.by = 'injury.dpi', split.by = 'condition.id', pt.size = 0, cols = mets.cols)
+
+VlnPlot(updated.seurat %>% subset(subset = injury.dpi == "4dpi"), features = c("Myog", "Myod1", 'Ckm', 'Pax7'), group.by = 'condition.id', pt.size = 0, cols = rev(mets.cols)) & 
+  theme(axis.title.y = element_blank()) & 
+  theme(axis.title.x = element_blank())
+
+VlnPlot(updated.seurat %>% subset(subset = injury.dpi == "7dpi"), features = c("Myog", "Myod1", 'Ckm', 'Pax7'), group.by = 'condition.id', pt.size = 0, cols = rev(mets.cols)) & 
+  theme(axis.title.y = element_blank()) & 
+  theme(axis.title.x = element_blank())
+
+```
+
+### FigS2 ---- violin vlnplots -- good dimensions -- top 4dpi
+```{r}
+# new.cluster.ids <- c('Young', "Aged")
+# names(new.cluster.ids) <- levels(updated.seurat)
+# updated.seurat <- RenameIdents(updated.seurat, new.cluster.ids)
+
+# updated.seurat <- SetIdent(updated.seurat, value = 'condition.id')
+# level.order <- c('Young', "Aged")
+# levels(level.order) <- factor(c('Young', "Aged"))
+# 
+# levels(updated.seurat) <- level.order
+# 
+# my_levels <-c('Young', "Aged")
+# updated.seurat$condition.id <- factor(x = updated.seurat$condition.id, levels = my_levels)
+# 
+
+genelist <- c('Fgfr1', 'Fgfr4', 'Notch3', 'Ttn', 'Neb', 'Actn2', 'Six1', 'Runx1', 'Sox6')
+genelist <- unique(genelist)
+
+p1 <- list()
+for (i in 1:length(genelist))
+{
+
+  # VlnPlot(updated.seurat %>% subset(subset = injury.dpi == "4dpi"), features = c("Myog", "Myod1", 'Ckm', 'Pax7'), group.by = 'condition.id', pt.size = 0, cols = rev(mets.cols)) & 
+
+  p1[[i]] <- VlnPlot(updated.seurat %>% subset(subset = injury.dpi == "4dpi"), features = genelist[i], group.by = 'condition.id', pt.size = 0, cols = rev(mets.cols)) + 
+    theme(axis.text.y=element_text(size = 8),
+          axis.title = element_blank(),
+          axis.text.x = element_blank(),
+          legend.position = 'none',
+          plot.title = element_text(size= 10))
+}
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+pdf(file = paste(dir1, 'vlnplots_S2_4dpi', '.pdf', sep = "") ,width = 7, height = 1)
+
+grid.arrange(grobs = p1[1:length(genelist)], nrow = 1)
+
+dev.off()
+
+```
+### FigS2 ---- violin vlnplots -- good dimensions -- bottom 7dpi
+```{r}
+genelist <- c('Fgfr1', 'Fgfr4', 'Notch3', 'Ttn', 'Neb', 'Actn2', 'Six1', 'Runx1', 'Sox6')
+genelist <- unique(genelist)
+
+p1 <- list()
+for (i in 1:length(genelist))
+{
+
+  # VlnPlot(updated.seurat %>% subset(subset = injury.dpi == "4dpi"), features = c("Myog", "Myod1", 'Ckm', 'Pax7'), group.by = 'condition.id', pt.size = 0, cols = rev(mets.cols)) & 
+
+  p1[[i]] <- VlnPlot(updated.seurat %>% subset(subset = injury.dpi == "7dpi"), features = genelist[i], group.by = 'condition.id', pt.size = 0, cols = rev(mets.cols)) + 
+    theme(axis.text.y=element_text(size = 8),
+          axis.title = element_blank(),
+          axis.text.x = element_blank(),
+          legend.position = 'none',
+          plot.title = element_text(size= 10))
+}
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+pdf(file = paste(dir1, 'vlnplots_S2_7dpi', '.pdf', sep = "") ,width = 7, height = 1)
+
+grid.arrange(grobs = p1[1:length(genelist)], nrow = 1)
+
+dev.off()
+
+```
+
+### FigS2 ---- violin vlnplots -- good dimensions -- multiple stages genes - 4dpi
+```{r}
+genelist <- c('Pax7', 'Myog', 'Myod1', 'Ckm')
+genelist <- unique(genelist)
+
+p1 <- list()
+for (i in 1:length(genelist))
+{
+  p1[[i]] <- VlnPlot(updated.seurat %>% subset(subset = injury.dpi == "4dpi"), features = genelist[i], group.by = 'condition.id', pt.size = 0, cols = rev(mets.cols)) + 
+    theme(axis.text.y=element_text(size = 8),
+          axis.title = element_blank(),
+          axis.text.x = element_blank(),
+          legend.position = 'none',
+          plot.title = element_text(size= 10))
+}
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+pdf(file = paste(dir1, 'vlnplots_S2_multiple_stages_4dpi', '.pdf', sep = "") ,width = 3.1, height = 1)
+
+grid.arrange(grobs = p1[1:length(genelist)], nrow = 1)
+
+dev.off()
+
+```
+
+### FigS2 ---- violin vlnplots -- good dimensions -- multiple stages genes - 7dpi
+```{r}
+genelist <- c('Pax7', 'Myog', 'Myod1', 'Ckm')
+genelist <- unique(genelist)
+
+p1 <- list()
+for (i in 1:length(genelist))
+{
+  p1[[i]] <- VlnPlot(updated.seurat %>% subset(subset = injury.dpi == "7dpi"), features = genelist[i], group.by = 'condition.id', pt.size = 0, cols = rev(mets.cols)) + 
+    theme(axis.text.y=element_text(size = 8),
+          axis.title = element_blank(),
+          axis.text.x = element_blank(),
+          legend.position = 'none',
+          plot.title = element_text(size= 10))
+}
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+pdf(file = paste(dir1, 'vlnplots_S2_multiple_stages_7dpi', '.pdf', sep = "") ,width = 3.1, height = 1)
+
+grid.arrange(grobs = p1[1:length(genelist)], nrow = 1)
+
+dev.off()
+
+```
+
+### Fig3 -- branch1 trajectory
+```{r}
+
+x <- cds.branch1.full
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'condition.id') + scale_color_manual(values = mets.cols)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'injury.dpi')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'celltype.seurat')
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, genes = c("Pax7", 'Myod1', "Myog", "Mest"), scale_to_range = T)
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, color_cells_by = 'injury.dpi')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, color_cells_by = 'monocle.clusters.working')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = T, label_cell_groups = F)
+
+# x <- order_cells(x, root_pr_nodes = 'Y_50')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'pseudotime')
+```
+
+### Fig S4 --- expression pseudotime feature plots 
+```{r}
+genelist <- c('Myoz1', 'Myoz3', 'Runx1', 'Gli3', 'Smad5', 'Peg3', 'Kirrel3')
+
+for (i in 1:length(genelist))
+{
+  pdf(file = paste(dir1, 'trajectory_', genelist[i], '.pdf', sep = "") ,width = 13, height = 11)
+
+text.size <- 30
+  print(plot_cells(cds.master, label_groups_by_cluster=F, cell_size = 1.4, 
+             trajectory_graph_segment_size = 0.9, 
+             graph_label_size = 3, 
+             label_principal_points = F, 
+             label_cell_groups = F, 
+             label_branch_points = F, 
+             label_leaves = F, 
+             label_roots = F, 
+             genes = genelist[i], 
+             scale_to_range = T) + 
+    theme_classic() + 
+    theme(axis.text.x = element_text(size = text.size)) +     
+    theme(axis.text.y = element_text(size = text.size)) +
+    theme(axis.title.x = element_text(size = text.size)) +
+    theme(axis.title.y = element_text(size = text.size)) + 
+    theme(legend.text=element_text(size=20))+
+    ggtitle(NULL))
+
+dev.off()
+}
+```
+
+# Fig2 -- plot_cells with genes --- CORRECT dimensions good dimensions
+```{r}
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+#genelist <- c('Pax7', 'Myf5', 'Myog', "Runx1", "Neb", 'Myh3', "Myh8", 'Myh1', "Myh4", "Mymk", 'Mest', 'Itm2a', 'Ncoa7')
+#genelist <- c('Pax7', 'Myf5', 'Myog')
+#genelist <- c('Pax7', "Mymk", "Myh4")
+genelist <- c( "Myh8", "Myh3")
+#genelist <- "Pdgfra"
+#genelist <- "Mgp"
+
+
+for (i in 1:length(genelist))
+{
+  #pdf(file = paste(dir1, 'trajectory_', genelist[i], '.pdf', sep = "") ,width = 13, height = 11)
+  pdf(file = paste(dir1, 'trajectory_', genelist[i], '.pdf', sep = "") ,width = 2.3, height = 1.8)
+
+text.size <- 8
+  print(
+    plot_cells(cds.master, label_groups_by_cluster=F, cell_size = .3, alpha = 0.6,
+             trajectory_graph_segment_size = 0.35, 
+             graph_label_size = 0, 
+             label_principal_points = F, 
+             label_cell_groups = F, 
+             label_branch_points = F, 
+             label_leaves = F, 
+             label_roots = F, 
+             labels_per_group = F,
+             genes = genelist[i], 
+             scale_to_range = T) + 
+    theme_classic() + 
+    theme(axis.text.x = element_text(size = text.size)) +     
+    theme(axis.text.y = element_text(size = text.size)) +
+    theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_text(size = text.size, margin = margin(t = 0, r = 0, b = 0, l = -8))) + 
+    theme(legend.text=element_text(size=8))+
+    theme(legend.title=element_text(size = 8), 
+          legend.position = ) + 
+    theme(plot.title=element_blank()) +
+    theme(legend.key.size = unit(.25, "cm"),
+          legend.margin=margin(0,0,0,0),
+          legend.box.margin=margin(0,0,0,-14)) +
+    ggtitle("tests") +
+      theme(plot.margin = margin(t = -17.5,  # Top margin
+                             r = 3,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) # Left margin
+  )
+
+dev.off()
+}
+```
+
+### Pdgfra for rebuttal
+```{r}
+pdgf.counts <- as.vector(counts(cds.master)[grep("Pdgfra", rownames(counts(cds.master))),])
+pdgf.counts <- data.frame(cells = names(counts(cds.master)[grep("Pdgfra", rownames(counts(cds.master))),]), 
+                          counts = pdgf.counts)
+pdgf.counts.pos <- pdgf.counts[which(pdgf.counts$counts > 0),]
+
+#tmp.seurat <- tmp.seurat[which(colnames(sce.branch2.sub1.aged.young) %in% colnames(tmp.seurat)), ]
+
+tmp.cds <- cds.master[, which(colnames(cds.master) %in% pdgf.counts.pos$cells) ] 
+plot_cells(tmp.cds)
+
+genelist <- "Pdgfra"
+
+for (i in 1:length(genelist))
+{
+  #pdf(file = paste(dir1, 'trajectory_', genelist[i], '.pdf', sep = "") ,width = 13, height = 11)
+  pdf(file = paste(dir1, 'trajectory_', genelist[i], '.pdf', sep = "") ,width = 2.3, height = 1.8)
+
+text.size <- 8
+  print(
+    plot_cells(tmp.cds, label_groups_by_cluster=F, cell_size = .5, alpha = 0.6,
+             trajectory_graph_segment_size = 0.35, 
+             graph_label_size = 0, 
+             label_principal_points = F, 
+             label_cell_groups = F, 
+             label_branch_points = F, 
+             label_leaves = F, 
+             label_roots = F, 
+             labels_per_group = F,
+             genes = genelist[i], 
+             scale_to_range = T) + 
+    theme_classic() + 
+    theme(axis.text.x = element_text(size = text.size)) +     
+    theme(axis.text.y = element_text(size = text.size)) +
+    theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_text(size = text.size, margin = margin(t = 0, r = 0, b = 0, l = -8))) + 
+    theme(legend.text=element_text(size=8))+
+    theme(legend.title=element_text(size = 8), 
+          legend.position = ) + 
+    theme(plot.title=element_blank()) +
+    theme(legend.key.size = unit(.25, "cm"),
+          legend.margin=margin(0,0,0,0),
+          legend.box.margin=margin(0,0,0,-14)) +
+    ggtitle("tests") +
+      theme(plot.margin = margin(t = -17.5,  # Top margin
+                             r = 3,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) # Left margin
+  )
+
+dev.off()
+}
+```
+
+### Pdgfra for rebuttal -- age
+```{r}
+pdgf.counts <- as.vector(counts(cds.master)[grep("Pdgfra", rownames(counts(cds.master))),])
+pdgf.counts <- data.frame(cells = names(counts(cds.master)[grep("Pdgfra", rownames(counts(cds.master))),]), 
+                          counts = pdgf.counts)
+pdgf.counts.pos <- pdgf.counts[which(pdgf.counts$counts > 0),]
+
+#tmp.seurat <- tmp.seurat[which(colnames(sce.branch2.sub1.aged.young) %in% colnames(tmp.seurat)), ]
+
+tmp.cds <- cds.master[, which(colnames(cds.master) %in% pdgf.counts.pos$cells) ] 
+plot_cells(tmp.cds)
+
+genelist <- "Pdgfra"
+
+for (i in 1:length(genelist))
+{
+  #pdf(file = paste(dir1, 'trajectory_', genelist[i], '.pdf', sep = "") ,width = 13, height = 11)
+  pdf(file = paste(dir1, 'trajectory_', genelist[i], '_condition_id', '.pdf', sep = "") ,width = 2.3, height = 1.8)
+  #pdf(file = paste(dir1, 'trajectory_', genelist[i], '_dpi', '.pdf', sep = "") ,width = 2.3, height = 1.8)
+
+text.size <- 8
+  print(
+    plot_cells(tmp.cds, label_groups_by_cluster=F, cell_size = .5, alpha = 0.6,
+             trajectory_graph_segment_size = 0.35, 
+             graph_label_size = 0, 
+             label_principal_points = F, 
+             label_cell_groups = F, 
+             label_branch_points = F, 
+             label_leaves = F, 
+             label_roots = F, 
+             labels_per_group = F,
+             #genes = genelist[i], 
+             color_cells_by = 'condition.id',
+             scale_to_range = T) + 
+    scale_color_manual(values = mets.cols) +
+    theme_classic() + 
+    theme(axis.text.x = element_text(size = text.size)) +     
+    theme(axis.text.y = element_text(size = text.size)) +
+    theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_text(size = text.size, margin = margin(t = 0, r = 0, b = 0, l = -8))) + 
+    theme(legend.text=element_text(size=8))+
+    theme(legend.title=element_text(size = 8), 
+          legend.position = ) + 
+    theme(plot.title=element_blank()) +
+    theme(legend.key.size = unit(.25, "cm"),
+          legend.margin=margin(0,0,0,0),
+          legend.box.margin=margin(0,0,0,-14)) +
+    ggtitle("tests") +
+      theme(plot.margin = margin(t = -17.5,  # Top margin
+                             r = 3,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) # Left margin
+  )
+
+dev.off()
+}
+```
+### col3a1 or any gene for rebuttal -- age
+```{r}
+gene <- "Col3a1"
+gene.pos.nuc.counts <- as.vector(counts(cds.master)[grep(gene, rownames(counts(cds.master))),])
+gene.pos.nuc.counts <- data.frame(cells = names(counts(cds.master)[grep("Pdgfra", rownames(counts(cds.master))),]), 
+                          counts = gene.pos.nuc.counts)
+gene.pos.nuc.counts <- gene.pos.nuc.counts[which(gene.pos.nuc.counts$counts > 0),]
+
+#tmp.seurat <- tmp.seurat[which(colnames(sce.branch2.sub1.aged.young) %in% colnames(tmp.seurat)), ]
+
+tmp.cds <- cds.master[, which(colnames(cds.master) %in% gene.pos.nuc.counts$cells) ] 
+plot_cells(tmp.cds)
+
+genelist <- gene
+
+for (i in 1:length(genelist))
+{
+  #pdf(file = paste(dir1, 'trajectory_', genelist[i], '.pdf', sep = "") ,width = 13, height = 11)
+  pdf(file = paste(dir1, 'trajectory_', genelist[i], '_condition_id', '.pdf', sep = "") ,width = 2.3, height = 1.8)
+  #pdf(file = paste(dir1, 'trajectory_', genelist[i], '_dpi', '.pdf', sep = "") ,width = 2.3, height = 1.8)
+
+text.size <- 8
+  print(
+    plot_cells(tmp.cds, label_groups_by_cluster=F, cell_size = .5, alpha = 0.6,
+             trajectory_graph_segment_size = 0.35, 
+             graph_label_size = 0, 
+             label_principal_points = F, 
+             label_cell_groups = F, 
+             label_branch_points = F, 
+             label_leaves = F, 
+             label_roots = F, 
+             labels_per_group = F,
+             #genes = genelist[i], 
+             color_cells_by = 'condition.id',
+             scale_to_range = T) + 
+    scale_color_manual(values = mets.cols) +
+    theme_classic() + 
+    theme(axis.text.x = element_text(size = text.size)) +     
+    theme(axis.text.y = element_text(size = text.size)) +
+    theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_text(size = text.size, margin = margin(t = 0, r = 0, b = 0, l = -8))) + 
+    theme(legend.text=element_text(size=8))+
+    theme(legend.title=element_text(size = 8), 
+          legend.position = ) + 
+    theme(plot.title=element_blank()) +
+    theme(legend.key.size = unit(.25, "cm"),
+          legend.margin=margin(0,0,0,0),
+          legend.box.margin=margin(0,0,0,-14)) +
+    ggtitle("tests") +
+      theme(plot.margin = margin(t = -17.5,  # Top margin
+                             r = 3,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) # Left margin
+  )
+
+dev.off()
+}
+```
+
+### NMJ for rebuttal -- age
+```{r}
+table <- read.csv("~/Desktop/")
+genelist <- c("Ano", 'Pdzrn4')
+genelist <- c("Col22a1", 'Prom1', 'Map3k7cl', 'Tigd4', 'Tigd4', )
+
+plot_cells(cds.master, genes = genelist, scale_to_range = T, cell_size = 2)
+
+VlnPlot(updated.seurat, features = genelist, group.by = 'celltype.seurat', split.by = 'condition.id')
+```
+
+
+# FigS3 -- plot_cells with genes --- CORRECT dimensions good dimensions
+```{r}
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+
+genelist <- c( "Runx1", "Peg3", 'Smad5', 'Gli3', 'Myh1', 'Myoz1', 'Myoz3', 'Itm2a', 'Ncoa7', 'Egfr')
+genelist <- unique(genelist)
+
+for (i in 1:length(genelist))
+{
+  pdf(file = paste(dir1, 'trajectory_', genelist[i], '.pdf', sep = "") ,width = 2.3, height = 1.8)
+
+text.size <- 8
+  print(
+    plot_cells(cds.master, label_groups_by_cluster=F, cell_size = .3, alpha = 0.6,
+             trajectory_graph_segment_size = 0.35, 
+             graph_label_size = 0, 
+             label_principal_points = F, 
+             label_cell_groups = F, 
+             label_branch_points = F, 
+             label_leaves = F, 
+             label_roots = F, 
+             labels_per_group = F,
+             genes = genelist[i], 
+             scale_to_range = T) + 
+    theme_classic() + 
+    theme(axis.text.x = element_text(size = text.size)) +     
+    theme(axis.text.y = element_text(size = text.size)) +
+    theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_text(size = text.size, margin = margin(t = 0, r = 0, b = 0, l = -8))) + 
+    theme(legend.text=element_text(size=8))+
+    theme(legend.title=element_text(size = 8), 
+          legend.position = ) + 
+    theme(plot.title=element_blank()) +
+    theme(legend.key.size = unit(.25, "cm"),
+          legend.margin=margin(0,0,0,0),
+          legend.box.margin=margin(0,0,0,-14)) +
+    ggtitle("tests") +
+      theme(plot.margin = margin(t = -17.5,  # Top margin
+                             r = 3,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) # Left margin
+  )
+
+dev.off()
+}
+
+```
+# Fig2 -- pmain pseudotime plot --- CORRECT dimensions good dimensions
+```{r}
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+
+
+  pdf(file = paste(dir1, 'trajectory_pseudotime',  '.pdf', sep = "") ,width = 2.3, height = 1.8)
+
+text.size <- 8
+  print(
+    plot_cells(cds.master, label_groups_by_cluster=F, cell_size = .3, alpha = 0.6,
+             trajectory_graph_segment_size = 0.25, 
+             graph_label_size = 0, 
+             label_principal_points = F, 
+             label_cell_groups = F, 
+             label_branch_points = F, 
+             label_leaves = F, 
+             label_roots = F, 
+             labels_per_group = F,
+             color_cells_by = 'pseudotime', 
+             scale_to_range = T) + 
+    theme_classic() + 
+    theme(axis.text.x = element_text(size = text.size)) +     
+    theme(axis.text.y = element_text(size = text.size)) +
+    theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_text(size = text.size, margin = margin(t = 0, r = 0, b = 0, l = -8))) + 
+    theme(legend.text=element_text(size=8))+
+    theme(legend.title=element_blank(), 
+          legend.position = ) + 
+    theme(plot.title=element_blank()) +
+    theme(legend.key.size = unit(.25, "cm"),
+          legend.margin=margin(0,0,0,0),
+          legend.box.margin=margin(0,0,0,-14)) +
+      theme(plot.margin = margin(t = 5,  # Top margin
+                             r = 3,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) # Left margin
+  )
+
+dev.off()
+
+```
+
+# Fig2 -- dpi pseudotime plot --- CORRECT dimensions good dimensions
+```{r}
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+
+
+  pdf(file = paste(dir1, 'trajectory_dpi',  '.pdf', sep = "") ,width = 2.3, height = 1.8)
+
+text.size <- 8
+  print(
+    plot_cells(cds.master, label_groups_by_cluster=F, cell_size = .3, alpha = 0.6,
+             trajectory_graph_segment_size = 0.25, 
+             graph_label_size = 0, 
+             label_principal_points = F, 
+             label_cell_groups = F, 
+             label_branch_points = F, 
+             label_leaves = F, 
+             label_roots = F, 
+             labels_per_group = F,
+             color_cells_by = 'injury.dpi', 
+             scale_to_range = T) + 
+    theme_classic() + 
+    theme(axis.text.x = element_text(size = text.size)) +     
+    theme(axis.text.y = element_text(size = text.size)) +
+    theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_text(size = text.size, margin = margin(t = 0, r = 0, b = 0, l = -8))) + 
+    theme(legend.text=element_text(size=8))+
+    theme(legend.title=element_blank(), 
+          legend.position = ) + 
+    theme(plot.title=element_blank()) +
+    theme(legend.key.size = unit(.25, "cm"),
+          legend.margin=margin(0,0,0,0),
+          legend.box.margin=margin(0,0,0,-14)) +
+      theme(plot.margin = margin(t = 5,  # Top margin
+                             r = 3,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) # Left margin
+  )
+
+dev.off()
+
+```
+
+
+# MMB -- celltype pseudotime plot --- CORRECT dimensions good dimensions
+```{r}
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+cols <- brewer.pal(n=8,"Set1")
+cols[2] <- 'cyan2' 
+cols[5] <- 'deepskyblue4' 
+
+  pdf(file = paste(dir1, 'trajectory_celltype',  '.pdf', sep = "") ,width = 2.3, height = 1.8)
+
+text.size <- 8
+  print(
+    plot_cells(cds.master, label_groups_by_cluster=F, cell_size = .3, alpha = 0.6,
+             trajectory_graph_segment_size = 0.25, 
+             graph_label_size = 0, 
+             label_principal_points = F, 
+             label_cell_groups = F, 
+             label_branch_points = F, 
+             label_leaves = F, 
+             label_roots = F, 
+             labels_per_group = F,
+             color_cells_by = 'celltype.seurat', 
+             scale_to_range = T) + 
+    theme_classic() + 
+  scale_color_manual(values = rev(cols[1:3]))+
+    theme(legend.position = 'none') + 
+    theme(axis.text.x = element_text(size = text.size)) +     
+    theme(axis.text.y = element_text(size = text.size)) +
+    theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_text(size = text.size, margin = margin(t = 0, r = 0, b = 0, l = -8))) + 
+    theme(legend.text=element_text(size=8))+
+
+      theme(plot.margin = margin(t = 5,  # Top margin
+                             r = 3,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) # Left margin
+  )
+
+dev.off()
+
+```
+
+# Fig2 -- condition.id pseudotime plot --- CORRECT dimensions good dimensions
+```{r}
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+cds.master@colData$condition.id <- factor(x = cds.master@colData$condition.id, levels = c("Young", "Aged"))
+
+  pdf(file = paste(dir1, 'trajectory_condition_id',  '.pdf', sep = "") ,width = 2.5, height = 1.8)
+
+text.size <- 8
+  print(
+    plot_cells(cds.master, label_groups_by_cluster=F, cell_size = .3, alpha = 0.6,
+             trajectory_graph_segment_size = 0.25, 
+             graph_label_size = 0, 
+             label_principal_points = F, 
+             label_cell_groups = F, 
+             label_branch_points = F, 
+             label_leaves = F, 
+             label_roots = F, 
+             labels_per_group = F,
+             color_cells_by = 'condition.id', 
+             scale_to_range = T) + 
+    scale_color_manual(values = rev(mets.cols)) + 
+    theme_classic() + 
+    theme(axis.text.x = element_text(size = text.size)) +     
+    theme(axis.text.y = element_text(size = text.size)) +
+    theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_text(size = text.size, margin = margin(t = 0, r = 0, b = 0, l = -8))) + 
+    theme(legend.text=element_text(size=8))+
+    theme(legend.title=element_blank(), 
+          legend.position = ) + 
+    theme(plot.title=element_blank()) +
+    theme(legend.key.size = unit(.25, "cm"),
+          legend.margin=margin(0,0,0,0),
+          legend.box.margin=margin(0,0,0,-14)) +
+      theme(plot.margin = margin(t = 5,  # Top margin
+                             r = 3,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) # Left margin
+  )
+
+dev.off()
+
+```
+# Fig1 -- overview trajectory plots
+```{r}
+color.list <- c("pseudotime", "injury.dpi", "condition.id")
+
+for (i in 1:length(genelist))
+{
+  pdf(file = paste(dir1, 'trajectory_', color.list[i], '.pdf', sep = "") ,width = 13, height = 11)
+
+      if (i ==3)
+      {
+        text.size <- 30
+      print(plot_cells(cds.master, label_groups_by_cluster=F, cell_size = 1.4, 
+                 trajectory_graph_segment_size = 0.9, 
+                 graph_label_size = 3, 
+                 label_principal_points = F, 
+                 label_cell_groups = F, 
+                 label_branch_points = F, 
+                 label_leaves = F, 
+                 label_roots = F, 
+                 color_cells_by = color.list[i], 
+                 scale_to_range = T) + 
+        theme_classic() +  scale_color_manual(values = mets.cols) +
+        theme(axis.text.x = element_text(size = text.size)) +     
+        theme(axis.text.y = element_text(size = text.size)) +
+        theme(axis.title.x = element_text(size = text.size)) +
+        theme(axis.title.y = element_text(size = text.size)) + 
+        theme(legend.text=element_text(size=20))+
+        ggtitle(NULL))
+      }
+  
+text.size <- 30
+  print(plot_cells(cds.master, label_groups_by_cluster=F, cell_size = 1.4, 
+             trajectory_graph_segment_size = 0.9, 
+             graph_label_size = 3, 
+             label_principal_points = F, 
+             label_cell_groups = F, 
+             label_branch_points = F, 
+             label_leaves = F, 
+             label_roots = F, 
+             color_cells_by = color.list[i], 
+             scale_to_range = T) + 
+    theme_classic() + 
+    theme(axis.text.x = element_text(size = text.size)) +     
+    theme(axis.text.y = element_text(size = text.size)) +
+    theme(axis.title.x = element_text(size = text.size)) +
+    theme(axis.title.y = element_text(size = text.size)) + 
+    theme(legend.text=element_text(size=20))+
+    ggtitle(NULL))
+
+dev.off()
+}
+```
+
+### Opening xml file for plotting GO terms and genes
+```{r}
+library(XML)
+xml.terms <- xmlParse(file = "~/Downloads/analysis (1).xml", encoding="UTF-8")
+xml.terms <- xmlToDataFrame("~/Downloads/analysis (1).xml")
+```
+
+```{r}
+
+library("rjson")
+
+# Give the input file name to the function.
+result <- fromJSON(file = "~/Downloads/myonuclear_subset_GO_process.json")
+
+# Print the result.
+print(result)
+
+result$overrepresentation$group[1][[1]]$result[[1]]$input_list$mapped_id_list$mapped_id
+
+length(result$overrepresentation$group)
+```
+
+```{r}
+# pathway.list <- list()
+# for (group in 1:length(result$overrepresentation$group))
+# {
+#   for (j in 1:length(result$overrepresentation$group[[group]]$result))
+#   {
+# 
+#     genelist <- result$overrepresentation$group[[group]]$result[[j]]$input_list$mapped_id_list$mapped_id
+#     name <- result$overrepresentation$group[[group]]$result[[j]]$term$label
+#   pathway.list[[name]] <- genelist
+#     
+#   }
+# }
+# pathway.list
+
+result <- fromJSON(file = "~/Downloads/myonuclear_subset_GO_process.json")
+
+pathway.list <- list()
+for (category in 1:length(result$overrepresentation$group))
+{
+  for (sub.category in 1:length(result$overrepresentation$group[[category]]$result))
+  {
+    
+  if (is.numeric(result$overrepresentation$group[[category]]$result$number_in_reference) == TRUE) {
+    genelist <- result$overrepresentation$group[[category]]$result$input_list$mapped_id_list$mapped_id
+    name <- result$overrepresentation$group[[category]]$result$term$label
+    pathway.list[[name]] <- genelist
+  }
+    
+    else{
+    genelist <- result$overrepresentation$group[[category]]$result[[sub.category]]$input_list$mapped_id_list$mapped_id
+    name <- result$overrepresentation$group[[category]]$result[[sub.category]]$term$label
+    pathway.list[[name]] <- genelist
+    }
+  }
+}
+```
+
+```{r}
+for (i in 1:length(pathway.list))
+#for (i in 1:3)
+{
+  gene.plotting.function(genelist = unique(pathway.list[[i]]), sce = sce.branch2.aged.young.FULL,
+                         title = paste(as.character(names(pathway.list[i])), " : ", as.character(length(unique(pathway.list[[i]])), sep = "")))
+
+}
+```
+
+
+```{r}
+result <- fromJSON(file = "~/Downloads/analysis (2).json")
+
+
+pathway.list <- list()
+for (group in 1:length(result$overrepresentation$group))
+{
+  for (j in 1:length(result$overrepresentation$group[[group]]$result))
+  {
+
+    genelist <- result$overrepresentation$group[[group]]$result$input_list$mapped_id_list$mapped_id
+    if (is.null(genelist)) {next} else { 
+    name <- result$overrepresentation$group[[group]]$result$term$label
+  pathway.list[[name]] <- genelist
+    }
+  }
+}
+
+
+for (i in 1:length(pathway.list))
+#for (i in 1:3)
+{
+  gene.plotting.function(genelist = unique(pathway.list[[i]]), sce = sce.branch2.aged.young.FULL,
+                         title = paste(as.character(names(pathway.list[i])), " : ", as.character(length(unique(pathway.list[[i]])), sep = "")))
+
+}
+```
+
+### Fig4 -- branch2 trajectory
+```{r}
+
+x <- cds.branch2.full
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'condition.id') + scale_color_manual(values = mets.cols)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'injury.dpi')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'celltype.seurat')
+
+#plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, genes = c("Pax7", 'Myod1', "Myog", "Mest"), scale_to_range = T)
+
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, color_cells_by = 'injury.dpi')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, color_cells_by = 'monocle.clusters.working')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = T, label_cell_groups = F)
+
+# x <- order_cells(x, root_pr_nodes = 'Y_50')
+plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'pseudotime')
+```
+
+### Trying to flip Branch2 trajectory 
+```{r}
+plot1 <- plot_cells(x, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'condition.id') + scale_color_manual(values = mets.cols)
+
+plot.obj <- data.frame(dim1 = plot1$data$data_dim_1, 
+                       dim2 = plot1$data$data_dim_2,
+                       condition.id = plot1$data$condition.id)
+
+plot.obj$dim2 <- plot.obj$dim2 * -1
+
+
+
+plot.shuffled <- plot.obj[sample(1:nrow(plot.obj)), ]
+
+#ggplot(pseudoitme.colored.trajectory.shuffled, aes(x = dim1, y = dim2)) + geom_point(aes(fill = dim5 ), stroke = .5, shape = 21, size = 9, alpha = 0.9, color = "gray21") +scale_fill_gradient(low = "gray89", high = "darkolivegreen4") + theme_classic()
+
+ggplot(plot.shuffled, aes(x = dim1, y = dim2)) + geom_point(aes(color = condition.id ), stroke = 0.05, size = 4, alpha = 0.5, fill = 'black') + 
+  scale_color_manual(values = mets.cols) + 
+  theme_classic() +
+  theme(axis.text.x = element_text(size = 20)) +
+  theme(axis.text.y = element_text(size = 20)) +
+  theme(axis.title.x = element_text(size = 28)) +
+  theme(axis.title.y = element_text(size = 28)) + 
+  theme(legend.text=element_text(size=20)) +
+  theme(legend.title=element_text(size=20)) +
+  xlab("component 1") + ylab("component 2") + 
+  labs(fill = "condition.id")
+  #guides(fill=guide_legend(title="Pseudotime"))
+
+# DimPlot(myogenic.subset.final, group.by = 'injury.dpi', pt.size = 1.5)+ theme_classic()  + scale_color_brewer(palette = "Accent") +theme(axis.text.x = element_text(size = text.size)) +     
+#                                                                theme(axis.text.y = element_text(size = text.size)) +
+#                                                                theme(axis.title.x = element_text(size = text.size)) +
+#                                                               theme(axis.title.y = element_text(size = text.size)) + theme(legend.text=element_text(size=30)) 
+
+
+```
+
+### Fig4 --- Branch1 trajectory
+### flippingBranch1 trajectory 
+```{r}
+plot1 <- plot_cells(cds.branch1.full, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'condition.id') + scale_color_manual(values = mets.cols)
+
+plot1
+
+plot.obj <- data.frame(dim1 = plot1$data$data_dim_1, 
+                       dim2 = plot1$data$data_dim_2,
+                       condition.id = plot1$data$condition.id)
+
+# plot.obj1 <- plot.obj
+# plot.obj1$dim1 <- plot.obj$dim1 * -1
+# 
+# 
+# 
+# plot.shuffled <- plot.obj1[sample(1:nrow(plot.obj1)), ]
+# 
+# #ggplot(pseudoitme.colored.trajectory.shuffled, aes(x = dim1, y = dim2)) + geom_point(aes(fill = dim5 ), stroke = .5, shape = 21, size = 9, alpha = 0.9, color = "gray21") +scale_fill_gradient(low = "gray89", high = "darkolivegreen4") + theme_classic()
+# 
+# ggplot(plot.shuffled, aes(x = dim2, y = dim1)) + geom_point(aes(color = condition.id ), stroke = 0.05, size = 4, alpha = 0.5, fill = 'black') + 
+#   scale_color_manual(values = mets.cols) + 
+#   theme_classic() +
+#   theme(axis.text.x = element_text(size = 20)) +
+#   theme(axis.text.y = element_text(size = 20)) +
+#   theme(axis.title.x = element_text(size = 28)) +
+#   theme(axis.title.y = element_text(size = 28)) + 
+#   theme(legend.text=element_text(size=20)) +
+#   theme(legend.title=element_text(size=20)) +
+#   xlab("component 1") + ylab("component 2") + 
+#   labs(fill = "condition.id")
+
+
+plot.obj1 <- plot.obj
+plot.obj1$dim2 <- plot.obj1$dim2 * -1
+plot.obj1$dim1 <- plot.obj1$dim1 * -1
+
+plot.shuffled <- plot.obj1[sample(1:nrow(plot.obj1)), ]
+
+#ggplot(pseudoitme.colored.trajectory.shuffled, aes(x = dim1, y = dim2)) + geom_point(aes(fill = dim5 ), stroke = .5, shape = 21, size = 9, alpha = 0.9, color = "gray21") +scale_fill_gradient(low = "gray89", high = "darkolivegreen4") + theme_classic()
+
+ggplot(plot.shuffled, aes(x = dim2, y = dim1)) + geom_point(aes(color = condition.id ), stroke = 0.05, size = 4, alpha = 0.5, fill = 'black') + 
+  scale_color_manual(values = mets.cols) + 
+  theme_classic() +
+  theme(axis.text.x = element_text(size = 20)) +
+  theme(axis.text.y = element_text(size = 20)) +
+  theme(axis.title.x = element_text(size = 28)) +
+  theme(axis.title.y = element_text(size = 28)) + 
+  theme(legend.text=element_text(size=20)) +
+  theme(legend.title=element_text(size=20)) +
+  xlab("component 1") + ylab("component 2") + 
+  labs(fill = "condition.id")
+
+
+# plot.obj2 <- plot.obj
+# plot.obj2$dim2 <- plot.obj$dim2 * -1
+
+
+
+# plot.shuffled <- plot.obj2[sample(1:nrow(plot.obj2)), ]
+# 
+# #ggplot(pseudoitme.colored.trajectory.shuffled, aes(x = dim1, y = dim2)) + geom_point(aes(fill = dim5 ), stroke = .5, shape = 21, size = 9, alpha = 0.9, color = "gray21") +scale_fill_gradient(low = "gray89", high = "darkolivegreen4") + theme_classic()
+# 
+# ggplot(plot.shuffled, aes(x = dim2, y = dim1)) + geom_point(aes(color = condition.id ), stroke = 0.05, size = 4, alpha = 0.5, fill = 'black') + 
+#   scale_color_manual(values = mets.cols) + 
+#   theme_classic() +
+#   theme(axis.text.x = element_text(size = 20)) +
+#   theme(axis.text.y = element_text(size = 20)) +
+#   theme(axis.title.x = element_text(size = 28)) +
+#   theme(axis.title.y = element_text(size = 28)) + 
+#   theme(legend.text=element_text(size=20)) +
+#   theme(legend.title=element_text(size=20)) +
+#   xlab("component 1") + ylab("component 2") + 
+#   labs(fill = "condition.id")
+# 
+# 
+# plot.obj2 <- plot.obj
+# plot.obj2$dim2 <- plot.obj$dim2 * -1
+# 
+# 
+# 
+# plot.shuffled <- plot.obj2[sample(1:nrow(plot.obj2)), ]
+# 
+# #ggplot(pseudoitme.colored.trajectory.shuffled, aes(x = dim1, y = dim2)) + geom_point(aes(fill = dim5 ), stroke = .5, shape = 21, size = 9, alpha = 0.9, color = "gray21") +scale_fill_gradient(low = "gray89", high = "darkolivegreen4") + theme_classic()
+# 
+# ggplot(plot.shuffled, aes(x = dim1, y = dim2)) + geom_point(aes(color = condition.id ), stroke = 0.05, size = 4, alpha = 0.5, fill = 'black') + 
+#   scale_color_manual(values = mets.cols) + 
+#   theme_classic() +
+#   theme(axis.text.x = element_text(size = 20)) +
+#   theme(axis.text.y = element_text(size = 20)) +
+#   theme(axis.title.x = element_text(size = 28)) +
+#   theme(axis.title.y = element_text(size = 28)) + 
+#   theme(legend.text=element_text(size=20)) +
+#   theme(legend.title=element_text(size=20)) +
+#   xlab("component 1") + ylab("component 2") + 
+#   labs(fill = "condition.id")
+# 
+# 
+# plot.obj2 <- plot.obj
+# plot.obj2$dim1 <- plot.obj$dim1 * -1
+# 
+# 
+# plot.shuffled <- plot.obj2[sample(1:nrow(plot.obj2)), ]
+# 
+# #ggplot(pseudoitme.colored.trajectory.shuffled, aes(x = dim1, y = dim2)) + geom_point(aes(fill = dim5 ), stroke = .5, shape = 21, size = 9, alpha = 0.9, color = "gray21") +scale_fill_gradient(low = "gray89", high = "darkolivegreen4") + theme_classic()
+# 
+# ggplot(plot.shuffled, aes(x = dim1, y = dim2)) + geom_point(aes(color = condition.id ), stroke = 0.05, size = 4, alpha = 0.5, fill = 'black') + 
+#   scale_color_manual(values = mets.cols) + 
+#   theme_classic() +
+#   theme(axis.text.x = element_text(size = 20)) +
+#   theme(axis.text.y = element_text(size = 20)) +
+#   theme(axis.title.x = element_text(size = 28)) +
+#   theme(axis.title.y = element_text(size = 28)) + 
+#   theme(legend.text=element_text(size=20)) +
+#   theme(legend.title=element_text(size=20)) +
+#   xlab("component 1") + ylab("component 2") + 
+#   labs(fill = "condition.id")
+```
+### Fig4 -- myonuclear subset
+
+```{r}
+cds.branch2.full.tmp <- cds.branch2.full
+cds.branch2.full.tmp@colData$branch2.clusters <- cds.branch2.full.tmp@clusters@listData$UMAP$clusters
+
+
+cds.branch2.sub <- cds.branch2.full.tmp[, which(as.vector(as.numeric(cds.branch2.full.tmp@colData$branch2.clusters)) != 7 & 
+                                                as.vector(as.numeric(cds.branch2.full.tmp@colData$branch2.clusters)) != 9)] #&
+                                                #as.vector(as.numeric(cds.branch2.full.tmp@colData$branch2.clusters)) != 4)]
+
+plot_cells(cds.branch2.sub, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3,
+           label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F)
+
+plot_cells(cds.branch2.sub, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3,
+           label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'condition.id') + scale_color_manual(values = mets.cols)
+
+plot_cells(cds.branch2.sub, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3,
+           label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'injury.dpi') 
+
+plot_cells(cds.branch2.full, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3,
+           label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, genes = "Myh3", scale_to_range = T)
+plot_cells(cds.branch2.full, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3,
+           label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, genes = "Myh8", scale_to_range = T)
+# plot_cells(cds.branch2.sub, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3,
+#            label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, genes = c("Myh3", "Myh8"), scale_to_range = T)
+```
+
+### Fig5 - variance
+### Expression variance?
+```{r}
+# list.young.exprs.branch1 <- list()
+# list.aged.exprs.branch1 <- list()
+# list.young.exprs.branch2 <- list()
+# list.aged.exprs.branch2 <- list()
+
+
+updated.seurat$pseudotime <- pseudotime(cds.master)
+
+i = 13352 
+for (i in 13352:length(rownames(updated.seurat)))
+  {
+  ### Branch1
+  tmp.seurat <- updated.seurat[,which(updated.seurat$branch.path == 'branch1')]
+  gene <- rownames(tmp.seurat)[i]
+  
+  gene.pseudotime.expression.df <- data.frame(gene.exprs = as.vector(tmp.seurat@assays$RNA[gene][which(as.vector(tmp.seurat@assays$RNA[gene]) > 0)]),
+                                       pseudotime = as.vector(tmp.seurat$pseudotime[which(colnames(tmp.seurat@assays$RNA[gene])[which(as.vector(tmp.seurat@assays$RNA[gene]) > 0)] %in% colnames(updated.seurat))]),
+                                      condition.id = as.vector(tmp.seurat$condition.id[which(as.vector(tmp.seurat@assays$RNA[gene]) > 0 %in% colnames(tmp.seurat))]))
+
+# sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Aged")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Aged')])))
+# sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Young")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Young')])))
+
+  # calculating standard error for each gene over pseudotime sd / sqrt(n)
+  list.young.exprs.branch1[gene] <- sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Young")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Young')])))
+  list.aged.exprs.branch1[gene] <- sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Aged")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Aged')])))
+  
+  
+  ### Branch2
+  tmp.seurat <- updated.seurat[,which(updated.seurat$branch.path == 'branch2')]
+  gene <- rownames(tmp.seurat)[i]
+  
+  gene.pseudotime.expression.df <- data.frame(gene.exprs = as.vector(tmp.seurat@assays$RNA[gene][which(as.vector(tmp.seurat@assays$RNA[gene]) > 0)]),
+                                       pseudotime = as.vector(tmp.seurat$pseudotime[which(colnames(tmp.seurat@assays$RNA[gene])[which(as.vector(tmp.seurat@assays$RNA[gene]) > 0)] %in% colnames(updated.seurat))]),
+                                      condition.id = as.vector(tmp.seurat$condition.id[which(as.vector(tmp.seurat@assays$RNA[gene]) > 0 %in% colnames(tmp.seurat))]))
+
+# sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Aged")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Aged')])))
+# sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Young")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Young')])))
+
+  # calculating standard error for each gene over pseudotime sd / sqrt(n)
+  list.young.exprs.branch2[gene] <- sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Young")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Young')])))
+  list.aged.exprs.branch2[gene] <- sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Aged")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Aged')])))
+  
+  time.vec <- c(100, 500,seq(1 , 30000, by = 1000))
+  if(i %in% time.vec) {print(paste(i , ":", as.character(Sys.time()), sep = ""))}
+}
+
+#save(list.young.exprs.branch1, list.young.exprs.branch2, list.aged.exprs.branch1, list.aged.exprs.branch2, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/list_expression_variance.RData")
+load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/list_expression_variance.RData")
+```
+
+```{r}
+df <- data.frame(young.branch1 = unlist(list.young.exprs.branch1),
+                     young.branch2 = unlist(list.young.exprs.branch2),
+                     aged.branch1 = unlist(list.aged.exprs.branch1),
+                     aged.branch2 = unlist(list.aged.exprs.branch2))
+
+df[is.na(df)] <- 0
+
+df.gather <- gather(df)
+df.gather$key <- as.factor(df.gather$key)
+df.gather$value.log <- log2(df.gather$value)
+
+data_summary <- function(x) {
+   m <- mean(x)
+   ymin <- m-sd(x)
+   ymax <- m+sd(x)
+   return(c(y=m,ymin=ymin,ymax=ymax))
+}
+
+df.gather <- cbind(df.gather, 
+                   condition = rep(c("young", 'aged'), each = 58692))
+
+ggplot(df.gather) + geom_violin(aes(x = key, y = as.numeric(value.log), fill = condition),  color = 'black',stat = 'ydensity') +
+  scale_fill_manual(values = mets.cols)+
+  ggtitle("Standard error of individual genes across pseudotime") + theme_classic() + 
+  scale_x_discrete(limits=c("young.branch1", "aged.branch1", "young.branch2", "aged.branch2"))+ 
+  stat_summary(aes(x = key, y = as.numeric(value.log)), fun.data=data_summary, color = 'gray', shape= 10)
+
+ggplot(df.gather) + geom_violin(aes(x = key, y = as.numeric(value), fill = condition),  color = 'black',stat = 'ydensity') +
+  scale_fill_manual(values = mets.cols)+
+  ggtitle("Standard error of individual genes across pseudotime") + theme_classic() + 
+  scale_x_discrete(limits=c("young.branch1", "aged.branch1", "young.branch2", "aged.branch2"))+ 
+  stat_summary(aes(x = key, y = as.numeric(value)), fun.data=data_summary, color = 'gray', shape= 10)
+```
+
+### variance standard error violin plots geom_violin()
+```{r}
+new.df <- dtw.obj.combined.branch2[which(dtw.obj.combined.branch2$Y_pt > 70 & dtw.obj.combined.branch2$Y_pt < 118 & dtw.obj.combined.branch2$A_pt > 69 & dtw.obj.combined.branch2$A_pt < 118),]
+tmp.seurat.dtw <- updated.seurat
+tmp.seurat.dtw$biggest.diff <- 0
+tmp.seurat.dtw$biggest.diff[which(colnames(tmp.seurat.dtw) %in% c(new.df$Y_umi, new.df$A_umi))] <- 'dtw.different'
+
+
+
+
+
+tmp.seurat.dtw$pseudotime <- pseudotime(cds.master)
+tmp.seurat <- tmp.seurat.dtw[,which(tmp.seurat.dtw$biggest.diff == 'dtw.different')]
+tmp.seurat <- tmp.seurat[which(GetAssayData(tmp.seurat, slot = "counts") > 0),]
+
+list.young.myonuclear.subset <- list()
+list.aged.myonuclear.subset <- list()
+#for (i in 1:length(rownames(tmp.seurat.dtw)))
+for (i in 1:length(rownames(tmp.seurat)))
+  {
+  ### myonuclear.subset
+  gene <- rownames(tmp.seurat)[i]
+  
+  gene.pseudotime.expression.df <- data.frame(gene.exprs = as.vector(tmp.seurat@assays$RNA[gene][which(as.vector(tmp.seurat@assays$RNA[gene]) > 0)]),
+                                       pseudotime = as.vector(tmp.seurat$pseudotime[which(colnames(tmp.seurat@assays$RNA[gene])[which(as.vector(tmp.seurat@assays$RNA[gene]) > 0)] %in% colnames(tmp.seurat))]),
+                                      condition.id = as.vector(tmp.seurat$condition.id[which(as.vector(tmp.seurat@assays$RNA[gene]) > 0 %in% colnames(tmp.seurat))]))
+
+# sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Aged")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Aged')])))
+# sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Young")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Young')])))
+
+  # calculating standard error for each gene over pseudotime sd / sqrt(n)
+  list.young.myonuclear.subset[gene] <- sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Young")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Young')])))
+  list.aged.myonuclear.subset[gene] <- sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Aged")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Aged')])))
+  
+  time.vec <- c(5, 50,2500, 100, 500,seq(1 , 30000, by = 1000))
+  if(i %in% time.vec) {print(paste(i , ":", as.character(Sys.time()), sep = ""))}
+}
+
+#save(list.young.exprs.branch1, list.young.exprs.branch2, list.aged.exprs.branch1, list.aged.exprs.branch2, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/list_expression_variance.RData")
+load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/list_expression_variance.RData")
+
+```
+
+```{r}
+df <- data.frame(young.branch1 = unlist(list.young.exprs.branch1),
+                     young.branch2 = unlist(list.young.exprs.branch2),
+                     aged.branch1 = unlist(list.aged.exprs.branch1),
+                     aged.branch2 = unlist(list.aged.exprs.branch2))
+
+df2 <- data.frame(young.branch2.subset = unlist(list.young.myonuclear.subset) ,
+                 aged.branch2.subset = unlist(list.aged.myonuclear.subset))
+
+#df <- cbind(df, young.branch2.subset = names(list.young.exprs.branch2) %in% )
+df[is.na(df)] <- 0
+df2[is.na(df2)] <- 0
+df2.gather <- gather(df2)
+
+df.gather <- gather(df)
+
+df.gather.full <- rbind(df.gather, df2.gather)
+
+df.gather.full$key <- as.factor(df.gather.full$key)
+
+data_summary <- function(x) {
+   m <- mean(x)
+   ymin <- m-sd(x)
+   ymax <- m+sd(x)
+   return(c(y=m,ymin=ymin,ymax=ymax))
+}
+
+vec <- c(rep(c("young", 'aged'), each = 58692), rep(c("young", 'aged'), each = 1979))
+df.gather.full <- cbind(df.gather.full, 
+                   condition = vec)
+df.gather.full$value.log <- log2(df.gather.full$value)
+
+
+ggplot(df.gather.full) + 
+  geom_violin(aes(x = key, y = as.numeric(value.log), fill = condition),  color = 'black',stat = 'ydensity', scale = 'width') +
+  scale_fill_manual(values = mets.cols)+
+  ggtitle("Standard error of individual genes across pseudotime") + theme_classic() + 
+  scale_x_discrete(limits=c("young.branch1", "aged.branch1", "young.branch2", "aged.branch2", 'young.branch2.subset', 'aged.branch2.subset' ))
+  #stat_summary(aes(x = key, y = as.numeric(value.log)), fun.data=data_summary, color = 'gray', shape= 10)
+
+ggplot(df.gather.full) + 
+  geom_violin(aes(x = key, y = as.numeric(value), fill = condition),  color = 'black',stat = 'ydensity', scale = 'width') +
+  scale_fill_manual(values = mets.cols)+
+  ggtitle("Standard error of individual genes across pseudotime") + theme_classic() + 
+  scale_x_discrete(limits=c("young.branch1", "aged.branch1", "young.branch2", "aged.branch2", 'young.branch2.subset', 'aged.branch2.subset'))
+  #stat_summary(aes(x = key, y = as.numeric(value)), fun.data=data_summary, color = 'gray', shape= 10)
+```
+### Variance of MAIN MYONUCLEAR SUBSET --- use this one loop to calc variance for myonuclear subset 
+```{r}
+updated.seurat$pseudotime <- pseudotime(cds.master)
+tmp.seurat <- updated.seurat[which(rownames(sce.branch2.sub1.aged.young) %in% rownames(updated.seurat)), ]
+tmp.seurat <- tmp.seurat[which(colnames(sce.branch2.sub1.aged.young) %in% colnames(tmp.seurat)), ]
+# tmp.seurat.dtw$pseudotime <- pseudotime(cds.master)
+# tmp.seurat <- tmp.seurat.dtw[,which(tmp.seurat.dtw$biggest.diff == 'dtw.different')]
+# tmp.seurat <- tmp.seurat[which(GetAssayData(tmp.seurat, slot = "counts") > 0),]
+
+list.young.myonuclear.subset <- list()
+list.aged.myonuclear.subset <- list()
+
+for (i in 1:length(rownames(tmp.seurat)))
+  {
+  ### myonuclear.subset
+  gene <- rownames(tmp.seurat)[i]
+  
+  gene.pseudotime.expression.df <- data.frame(gene.exprs = as.vector(tmp.seurat@assays$RNA[gene][which(as.vector(tmp.seurat@assays$RNA[gene]) > 0)]),
+                                       pseudotime = as.vector(tmp.seurat$pseudotime[which(colnames(tmp.seurat@assays$RNA[gene])[which(as.vector(tmp.seurat@assays$RNA[gene]) > 0)] %in% colnames(tmp.seurat))]),
+                                      condition.id = as.vector(tmp.seurat$condition.id[which(as.vector(tmp.seurat@assays$RNA[gene]) > 0 %in% colnames(tmp.seurat))]))
+
+# sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Aged")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Aged')])))
+# sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Young")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Young')])))
+
+  # calculating standard error for each gene over pseudotime sd / sqrt(n)
+  list.young.myonuclear.subset[gene] <- sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Young")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Young')])))
+  list.aged.myonuclear.subset[gene] <- sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Aged")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Aged')])))
+  
+  time.vec <- c(5, 50,2500, 100, 500,seq(1 , 30000, by = 1000))
+  if(i %in% time.vec) {print(paste(i , ":", as.character(Sys.time()), sep = ""))}
+}
+```
+
+```{r}
+save(list.young.myonuclear.subset, list.aged.myonuclear.subset, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/myonuclear_subset_variance.RData")
+```
+
+
+#### violin plots of log variances --- CORRECT 
+```{r}
+df <- data.frame(young.branch1 = unlist(list.young.exprs.branch1),
+                     young.branch2 = unlist(list.young.exprs.branch2),
+                     aged.branch1 = unlist(list.aged.exprs.branch1),
+                     aged.branch2 = unlist(list.aged.exprs.branch2))
+
+df[is.na(df)] <- 0
+
+df.gather <- gather(df)
+df.gather$key <- as.factor(df.gather$key)
+df.gather$value.log <- log2(df.gather$value)
+
+# data_summary <- function(x) {
+#    m <- mean(x)
+#    ymin <- m-sd(x)
+#    ymax <- m+sd(x)
+#    return(c(y=m,ymin=ymin,ymax=ymax))
+# }
+
+df.gather <- cbind(df.gather, 
+                   condition = rep(c("young", 'aged'), each = 58692))
+
+df.gather <- df.gather[which(df.gather$value > 0),]
+
+df.myonuclear.subset <- data.frame(young.myonuclear.subset = unlist(list.young.myonuclear.subset),
+                                   aged.myonuclear.subset = unlist(list.aged.myonuclear.subset))
+df.myonuclear.subset.gather <- gather(df.myonuclear.subset)
+df.myonuclear.subset.gather$key <- as.factor(df.myonuclear.subset.gather$key)
+df.myonuclear.subset.gather$value.log <- log2(df.myonuclear.subset.gather$value)
+df.myonuclear.subset.gather <- cbind(df.myonuclear.subset.gather, 
+                   condition = rep(c("young", 'aged'), each = 7248))
+
+#df.myonuclear.subset.gather <- df.myonuclear.subset.gather[,-2]
+
+
+df.final <- rbind(df.gather, df.myonuclear.subset.gather)
+
+ggplot(df.final) + geom_violin(aes(x = key, y = as.numeric(value.log), fill = condition),  color = 'black',stat = 'ydensity') +
+  scale_fill_manual(values = mets.cols)+
+  ggtitle("Standard error of individual genes across pseudotime") + theme_classic() + 
+  scale_x_discrete(limits=c("young.branch1", "aged.branch1", "young.branch2", "aged.branch2", 'young.myonuclear.subset', 'aged.myonuclear.subset'))+ 
+  stat_summary(aes(x = key, y = as.numeric(value.log)), fun.data=data_summary, color = 'gray', shape= 10)
+
+ggplot(df.final) + geom_violin(aes(x = key, y = as.numeric(value), fill = condition),  color = 'black',stat = 'ydensity') +
+  scale_fill_manual(values = mets.cols)+
+  ggtitle("Standard error of individual genes across pseudotime") + theme_classic() + 
+  scale_x_discrete(limits=c("young.branch1", "aged.branch1", "young.branch2", "aged.branch2", 'young.myonuclear.subset', 'aged.myonuclear.subset'))+ 
+  stat_summary(aes(x = key, y = as.numeric(value)), fun.data=data_summary, color = 'gray', shape= 10)
+```
+### Stats on these violins
+```{r}
+# log
+wilcox.test(df.final$value.log[which(df.final$key == 'young.branch1')], 
+            df.final$value.log[which(df.final$key == 'aged.branch1')])
+
+wilcox.test(df.final$value.log[which(df.final$key == 'young.branch2')], 
+            df.final$value.log[which(df.final$key == 'aged.branch2')])
+
+wilcox.test(df.final$value.log[which(df.final$key == 'young.myonuclear.subset')], 
+            df.final$value.log[which(df.final$key == 'aged.myonuclear.subset')])
+
+# raw
+wilcox.test(df.final$value[which(df.final$key == 'young.branch1')], 
+            df.final$value[which(df.final$key == 'aged.branch1')])
+
+wilcox.test(df.final$value[which(df.final$key == 'young.branch2')], 
+            df.final$value[which(df.final$key == 'aged.branch2')])
+
+wilcox.test(df.final$value[which(df.final$key == 'young.myonuclear.subset')], 
+            df.final$value[which(df.final$key == 'aged.myonuclear.subset')])
+
+```
+
+
+# Fig5 - average expression
+```{r}
+updated.seurat.tmp <- SetIdent(updated.seurat, value = 'condition.id')
+df1 <- data.frame(AverageExpression(updated.seurat.tmp)$RNA)
+ggplot(df1, aes(x = Young, y = Aged, 2)) + geom_point() + theme_classic()
+summary(lm(df1$Young ~ df1$Aged))$r.squared
+
+df.log <- data.frame(young.log = -log(df1$Young, 10), aged.log = -log(df1$Aged, 10))
+df2 <- df.log
+#df2$young.log[which(df2$young.log == '-Inf')] <- 0
+#df2$aged.log[which(df2$aged.log == '-Inf')] <- 0
+df2 <- df2[-which(df2$aged.log == 'Inf') ,]
+df2 <- df2[-which(df2$young.log == 'Inf') ,]
+
+
+ggplot(df2, aes(x = young.log, y = aged.log, 2)) + geom_point() + theme_classic()
+
+summary(lm(df2$young.log ~ df2$aged.log))$r.squared
+```
+### Fig5 -- DTW plots
+### plotting all on top of each other -- with average
+```{r}
+dir <- "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/DTW_bootstrapping/"
+#setwd(dir)
+
+for (i in 1:30)
+#for (i in 1:2)
+{
+  
+  #new.dir <- paste(list.files(include.dirs = T, path = dir)[i], '/', list.files()[i], '_DTW.out', sep = "")
+  
+  dtw.obj <- read.delim(file  = paste(dir, list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/DTW_bootstrapping/")[i], '/', 
+                                      list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/DTW_bootstrapping/")[i], '_DTW.out', sep = ""), skip = 2)
+
+  dtw.obj <- dtw.obj[-1,]
+
+  title = 'more subsamples'
+  dtw.obj <- cbind(dtw.obj, data.frame(time = seq(1:nrow(dtw.obj)),
+                                difference = dtw.obj$Y_pt - dtw.obj$A_pt))
+  
+  # print(ggplot(dtw.obj) + geom_line(aes(x = time, y = difference), size = 1)  + theme_classic()  + geom_hline(yintercept = 0))
+  
+
+  dtw.obj <- cbind(dtw.obj, 
+        Y_pt.norm = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt )),
+        A_pt.norm = c(dtw.obj$A_pt / max(dtw.obj$A_pt )), 
+        norm.dff = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt ) - c(dtw.obj$A_pt / max(dtw.obj$A_pt ))),
+        subsample = i)
+  
+
+  dtw.obj.combined <- rbind(dtw.obj.combined, dtw.obj)
+}
+
+  mean.obj.young <- c()
+  mean.obj.aged <- c()
+  for (i in 1:5776){
+    mean.obj.young <- c(mean.obj.young, mean(dtw.obj.combined$Y_pt[which(dtw.obj.combined$time == as.numeric(i))]))
+        mean.obj.aged <- c(mean.obj.aged, mean(dtw.obj.combined$A_pt[which(dtw.obj.combined$time == as.numeric(i))]))
+  }
+  mean.df <- data.frame(Y_pt = mean.obj.young,
+                        A_pt = mean.obj.aged)
+  
+  
+  
+       print(ggplot() +
+          geom_rect(aes(xmin = 5, xmax = 35, ymin = 5, ymax = 35), alpha = 0.3, fill = 'gray', color = 'black', stroke = .4) +
+          geom_rect(aes(xmin = 70, xmax = 118, ymin = 69, ymax = 118), alpha = 0.3, fill = 'gray', color = 'black', stroke = .4) +
+          geom_vline(xintercept = dtw.obj$Y_pt[which(dtw.obj$Y_pt > 50 & dtw.obj$Y_pt < 53)][1], color = 'chartreuse3', size = 1.5) + 
+          geom_vline(xintercept = dtw.obj$Y_pt[which(dtw.obj$Y_pt > 60 & dtw.obj$Y_pt < 63)][1], color = 'chartreuse3', size = 1.5) +
+      
+      geom_line(data = dtw.obj.combined, aes(x = Y_pt, y = A_pt, color = as.factor(subsample)), size = 2, alpha = 0.3)  + 
+        scale_color_manual(values = rep('gray', 30))+
+      
+        geom_line(data = mean.df, aes(x = Y_pt, y = A_pt), color = "black", size = 2.2)  + 
+
+        geom_abline(intercept = 0, slope = 1, color = 'red', size = 1, linetype = 'dashed') +
+
+
+      theme_classic() +
+
+      ggtitle(title) +
+      theme(plot.title = element_text(size = 20, face = "bold")))
+       
+       ### Time plot try 2
+      print(ggplot() +
+      geom_line(data = dtw.obj.combined, aes(x = time, y = difference, color = as.factor(subsample)), size = 1, alpha = 0.3)  + 
+        scale_color_manual(values = rep('gray', 30))+
+     
+       geom_line(data = mean.df.time.plot, aes(x = time, y = difference), color = "black", size = 1.5)  + 
+       #geom_line(size = 2)  +
+     
+       theme_classic() +           
+        
+       geom_hline(yintercept = 0, linetype = 'dashed', color = 'red', size = 1) + 
+          geom_vline(size = 1,xintercept = mean.df.time.plot$time[which(mean.df.time.plot$Y_pt > 50 & mean.df.time.plot$Y_pt < 51)][1], color = 'chartreuse3') + 
+          geom_vline(size = 1, xintercept = mean.df.time.plot$time[which(mean.df.time.plot$Y_pt > 63 & mean.df.time.plot$Y_pt < 64)][1], color = 'chartreuse3'))
+```
+
+### Fig5 -- Full variance for both branches
+### Variance of each gene across pseudotime
+```{r}
+updated.seurat$pseudotime <- pseudotime(cds.master)
+
+#updated.seurat$pseudotime
+
+
+
+list.young <- list()
+list.aged <- list()
+
+for (i in 1:length(rownames(updated.seurat)))
+#for (i in 1:10)
+{
+
+  gene <- rownames(updated.seurat)[i]
+  
+  gene.pseudotime.expression.df <- data.frame(gene.exprs = as.vector(updated.seurat@assays$RNA[gene][which(as.vector(updated.seurat@assays$RNA[gene]) > 0)]),
+                                       pseudotime = as.vector(updated.seurat$pseudotime[which(colnames(updated.seurat@assays$RNA[gene])[which(as.vector(updated.seurat@assays$RNA[gene]) > 0)] %in% colnames(updated.seurat))]),
+                                      condition.id = as.vector(updated.seurat$condition.id[which(as.vector(updated.seurat@assays$RNA[gene]) > 0 %in% colnames(updated.seurat))]))
+
+# sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Aged")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Aged')])))
+# sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Young")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Young')])))
+
+  # calculating standard error for each gene over pseudotime sd / sqrt(n)
+  list.young[gene] <- sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Young")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Young')])))
+  list.aged[gene] <- sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Aged")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Aged')])))
+  
+  time.vec <- c(100, 500,seq(1 , 30000, by = 1000))
+  if(i %in% time.vec) (print(paste(i, Sys.time(), sep = ":")))
+}
+#save(list.young, list.aged, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/list_expression_variance_FULL_TRAJECTORY.RData")
+
+load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/list_expression_variance_FULL_TRAJECTORY.RData")
+
+
+```
+
+```{r}
+#load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/list_expression_variance_FULL_TRAJECTORY.RData")
+
+df <- data.frame(young = unlist(list.young),
+                 aged =  unlist(list.aged))
+
+df[is.na(df)] <- 0
+
+ggplot(df, aes(x = log10(young), y = log10(aged))) + geom_point() + ggtitle("Standard error of individual genes across pseudotime") + theme_classic()
+ggplot(df, aes(x = young, y = aged)) + geom_point() + ggtitle("Standard error of individual genes across pseudotime") + theme_classic()
+
+summary(lm(df$young ~ df$aged))$r.squared
+```
+
+```{r}
+df2 <- cbind(df, 
+             log.young = log10(df$young),
+             log.aged = log10(df$aged))
+
+vec1 <- df2$log.aged
+vec1[which(vec1 == '-Inf')] <- 0
+
+vec2 <- df2$log.young
+vec2[which(vec2 == '-Inf')] <- 0
+
+
+df2 <- cbind(df2, aged.log.adj = vec1, 
+                  young.log.adj = vec2)
+
+summary(lm(df2$aged.log.adj ~ df2$young.log.adj))$r.squared
+
+```
+### Variance comparisons standard error comparisons with young compared against itself 
+```{r}
+updated.seurat$pseudotime <- pseudotime(cds.master)
+
+#updated.seurat$pseudotime
+
+tmp.seurat <- updated.seurat[, which(updated.seurat$condition.id == 'Young')]
+
+seurat.subsample.young1 <-   tmp.seurat[,which(tmp.seurat@colData$condition.id == 'Young')]
+
+
+list.young1 <- list()
+list.young2 <- list()
+
+for (i in 1:length(rownames(tmp.seurat)))
+#for (i in 1:10)
+{
+
+  gene <- rownames(tmp.seurat)[i]
+  
+  gene.pseudotime.expression.df <- data.frame(gene.exprs = as.vector(tmp.seurat@assays$RNA[gene][which(as.vector(tmp.seurat@assays$RNA[gene]) > 0)]),
+                                       pseudotime = as.vector(tmp.seurat$pseudotime[which(colnames(tmp.seurat@assays$RNA[gene])[which(as.vector(tmp.seurat@assays$RNA[gene]) > 0)] %in% colnames(tmp.seurat))]),
+                                      condition.id = as.vector(tmp.seurat$condition.id[which(as.vector(tmp.seurat@assays$RNA[gene]) > 0 %in% colnames(tmp.seurat))]))
+
+# sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Aged")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Aged')])))
+# sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Young")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Young')])))
+
+  # calculating standard error for each gene over pseudotime sd / sqrt(n)
+  list.young[gene] <- sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Young")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Young')])))
+  list.aged[gene] <- sd(gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == "Aged")]) / sqrt(length((gene.pseudotime.expression.df$pseudotime[which(gene.pseudotime.expression.df$condition.id == 'Aged')])))
+  
+  time.vec <- c(100, 500,seq(1 , 30000, by = 1000))
+  if(i %in% time.vec) (print(paste(i, Sys.time(), sep = ":")))
+}
+save(list.young, list.aged, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/list_expression_variance_FULL_TRAJECTORY.RData")
+
+
+```
+
+### Fig S6 --- expression plots
+```{r}
+genelist <- c('Tbx20', 'Six1')
+for (i in 1:length(genelist))
+#for (i in 1:3)
+{
+  gene.plotting.function(genelist = unique(genelist), sce = sce.branch2.aged.young.FULL,
+                         title = genelist, " : ", as.character(length(unique(pathway.list[[i]])), sep = "")))
+
+}
+```
+
+#### Fig S6 - 10 x 10 grid of branch1 and then branch2 TF groups -- works --- go plotting_v2
+```{r}
+p <- heatmap(interct.df.branch1 )
+
+branch1.name.vec.reordered <- branch1.name.vec[rev(p$colInd)]
+p1 <- list()
+
+
+#for (i in 1:10)
+for (i in 1:length(branch1.name.vec.reordered))
+{
+  genelist <- branch1_archs4tf_TFs[grep(branch1.name.vec.reordered[i], names(branch1_archs4tf_TFs))][[1]]
+  
+  p1[[i]] <- gene.plotting.function(genelist = genelist, print.list = F, size = 1, text.size = 8, cols = mets.cols, sce = sce.branch1.aged.young.FULL, NA.0.correction = F, top.margin = 2, y.2.decimals = F, title = branch1.name.vec.reordered[i])
+  
+
+}
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+text.size <- 8
+
+pdf(file = paste(dir1, 'branch1_TF_100_grid', '.pdf', sep = "") ,width = 9, height = 11)
+
+do.call(grid.arrange, p1)
+dev.off()
+```
+
+### Make clade table 
+```{r}
+write.genelist.fun(branch1.name.vec.reordered, 
+                   filename = '~/Desktop/snRNAseq/PNAS_resubmission/tables/branch1_TF_heatmap_order.txt', paste = 0)
+```
+
+
+
+#### Fig S6 - branch1 TF groups -- group1
+```{r}
+p <- heatmap(interct.df.branch1 )
+
+branch1.name.vec.reordered <- branch1.name.vec[rev(p$colInd)]
+p1 <- list()
+
+
+for (i in 1:length(branch1.name.vec.reordered))
+{
+  genelist <- branch1_archs4tf_TFs[grep(branch1.name.vec.reordered[i], names(branch1_archs4tf_TFs))][[1]]
+
+
+  p1[[i]] <- gene.plotting.function(genelist = genelist, print.list = F, size = 1, text.size = 8, cols = mets.cols, sce = sce.branch1.aged.young.FULL, NA.0.correction = F, top.margin = 2, y.2.decimals = F, title = branch1.name.vec.reordered[i])
+  
+
+}
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+text.size <- 8
+
+pdf(file = paste(dir1, 'branch1_TF_100_grid', '.pdf', sep = "") ,width = 9, height = 11)
+
+do.call(grid.arrange, p1)
+dev.off()
+```
+
+
+```{r}
+p <- heatmap(interct.df.branch2 )
+
+branch2.name.vec.reordered <- branch2.name.vec[rev(p$colInd)]
+
+```
+
+### Make clade table 
+```{r}
+write.genelist.fun(branch2.name.vec.reordered, 
+                   filename = '~/Desktop/snRNAseq/PNAS_resubmission/tables/branch2_TF_heatmap_order.txt', paste = 0)
+```
+### FigS4 -- dpi only plots
+```{r}
+plot_cells(cds.master[,which(cds.master@colData$injury.dpi == '0dpi')], cell_size = 2, color_cells_by = 'injury.dpi', label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, label_principal_points = F, labels_per_group = F) + scale_color_manual(values = hue_pal()(3)[1])
+plot_cells(cds.master[,which(cds.master@colData$injury.dpi == '4dpi')], cell_size = 2, color_cells_by = 'injury.dpi', label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, label_principal_points = F, labels_per_group = F) + scale_color_manual(values = hue_pal()(3)[2])
+plot_cells(cds.master[,which(cds.master@colData$injury.dpi == '7dpi')], cell_size = 2, color_cells_by = 'injury.dpi', label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, label_principal_points = F, labels_per_group = F) + scale_color_manual(values = hue_pal()(3)[3])
+
+
+plot_cells(cds.master[,which(cds.master@colData$condition.id == 'Aged')], cell_size = 1.4, color_cells_by = 'condition.id') + scale_color_manual(values = mets.cols[1])
+plot_cells(cds.master[,which(cds.master@colData$condition.id == 'Young')], cell_size = 1.4, color_cells_by = 'condition.id') + scale_color_manual(values = mets.cols[2])
+
+```
+
+### Fig S4 -- trajectory partitioining -- branch1
+```{r}
+  pdf(file = paste(dir1, 'partitioning_branch1', '.pdf', sep = ""), width = 2.03, height = 1.72)
+text.size <- 8
+  print(
+    plot_cells(cds.branch1, label_groups_by_cluster=F, cell_size = .3, alpha = 0.6,
+             trajectory_graph_segment_size = 0.35, 
+             graph_label_size = 0, 
+             label_principal_points = F, 
+             label_cell_groups = F, 
+             label_branch_points = F, 
+             label_leaves = F, 
+             label_roots = F, 
+             labels_per_group = F,
+             color_cells_by = 'condition.id') + 
+    theme_classic() + 
+    scale_color_manual(values = mets.cols) + 
+    theme(axis.text.x = element_text(size = text.size)) +     
+    theme(axis.text.y = element_text(size = text.size)) +
+    theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_text(size = text.size, margin = margin(t = 0, r = 0, b = 0, l = -7))) + 
+    theme(legend.text=element_text(size=8))+
+    theme(legend.title=element_text(size = 8), 
+          legend.position = ) + 
+    theme(plot.title=element_blank()) +
+    theme(legend.position = 'none') +
+    ggtitle("tests") +
+      theme(plot.margin = margin(t = 0,  # Top margin
+                             r = 3,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) # Left margin
+  )
+
+dev.off()
+```
+
+### Fig S4 -- trajectory partitioining -- branch2
+```{r}
+  pdf(file = paste(dir1, 'partitioning_branch2', '.pdf', sep = ""), width = 2.03, height = 1.72)
+
+text.size <- 8
+  print(
+    plot_cells(cds.branch2, label_groups_by_cluster=F, cell_size = .3, alpha = 0.6,
+             trajectory_graph_segment_size = 0.35, 
+             graph_label_size = 0, 
+             label_principal_points = F, 
+             label_cell_groups = F, 
+             label_branch_points = F, 
+             label_leaves = F, 
+             label_roots = F, 
+             labels_per_group = F,
+             color_cells_by = 'condition.id') + 
+    theme_classic() + 
+    scale_color_manual(values = mets.cols) + 
+    theme(axis.text.x = element_text(size = text.size)) +     
+    theme(axis.text.y = element_text(size = text.size)) +
+    theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_text(size = text.size, margin = margin(t = 0, r = 0, b = 0, l = -7))) + 
+    theme(legend.text=element_text(size=8))+
+    theme(legend.title=element_text(size = 8), 
+          legend.position = ) + 
+    theme(plot.title=element_blank()) +
+    theme(legend.position = 'none') +
+    ggtitle("tests") +
+      theme(plot.margin = margin(t = 0,  # Top margin
+                             r = 3,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) # Left margin
+  )
+
+dev.off()
+```
+
+### Fig S4 -- trajectory partitioining -- branch1 -- reUMAPed
+```{r}
+  pdf(file = paste(dir1, 'partitioning_branch1_UMAP', '.pdf', sep = ""), width = 2.03, height = 1.72)
+
+text.size <- 8
+  print(
+    plot_cells(cds.branch1.full, label_groups_by_cluster=F, cell_size = .3, alpha = 0.6,
+             trajectory_graph_segment_size = 0.35, 
+             graph_label_size = 0, 
+             label_principal_points = F, 
+             label_cell_groups = F, 
+             label_branch_points = F, 
+             label_leaves = F, 
+             label_roots = F, 
+             labels_per_group = F,
+             color_cells_by = 'condition.id') + 
+    theme_classic() + 
+    scale_color_manual(values = mets.cols) + 
+    theme(axis.text.x = element_text(size = text.size)) +     
+    theme(axis.text.y = element_text(size = text.size)) +
+    theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_text(size = text.size, margin = margin(t = 0, r = 0, b = 0, l = -7))) + 
+    theme(legend.text=element_text(size=8))+
+    theme(legend.title=element_text(size = 8), 
+          legend.position = ) + 
+    theme(plot.title=element_blank()) +
+    theme(legend.position = 'none') +
+    ggtitle("tests") +
+      theme(plot.margin = margin(t = 0,  # Top margin
+                             r = 3,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) # Left margin
+  )
+
+dev.off()
+```
+
+### Fig S4 -- trajectory partitioining -- branch2 -- reUMAPed
+```{r}
+  pdf(file = paste(dir1, 'partitioning_branch2_UMAP', '.pdf', sep = ""), width = 2.03, height = 1.72)
+
+text.size <- 8
+  print(
+    plot_cells(cds.branch2.full, label_groups_by_cluster=F, cell_size = .3, alpha = 0.6,
+             trajectory_graph_segment_size = 0.35, 
+             graph_label_size = 0, 
+             label_principal_points = F, 
+             label_cell_groups = F, 
+             label_branch_points = F, 
+             label_leaves = F, 
+             label_roots = F, 
+             labels_per_group = F,
+             color_cells_by = 'condition.id') + 
+    theme_classic() + 
+    scale_color_manual(values = mets.cols) + 
+    theme(axis.text.x = element_text(size = text.size)) +     
+    theme(axis.text.y = element_text(size = text.size)) +
+    theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_text(size = text.size, margin = margin(t = 0, r = 0, b = 0, l = -7))) + 
+    theme(legend.text=element_text(size=8))+
+    theme(legend.title=element_text(size = 8), 
+          legend.position = ) + 
+    theme(plot.title=element_blank()) +
+    theme(legend.position = 'none') +
+    ggtitle("tests") +
+      theme(plot.margin = margin(t = 0,  # Top margin
+                             r = 3,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) # Left margin
+  )
+
+dev.off()
+```
+### Fig2 - young only - good dimensions correct
+```{r}
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+
+
+pdf(file = paste(dir1, 'trajectory_Young', '.pdf', sep = "") ,width = 2.03, height = 1.8)
+
+text.size <- 8
+  print(
+          plot_cells(cds.master[,which(cds.master@colData$condition.id == 'Young')], cell_size = .3, color_cells_by = 'condition.id',
+             trajectory_graph_segment_size = 0.35, 
+             graph_label_size = 0, 
+             label_principal_points = F, 
+             label_cell_groups = F, 
+             label_branch_points = F, 
+             label_leaves = F, 
+             label_roots = F, 
+             labels_per_group = F)   + scale_color_manual(values = mets.cols[2]) + 
+    theme_classic() + 
+    theme(axis.text.x = element_text(size = text.size)) +     
+    theme(axis.text.y = element_text(size = text.size)) +
+    theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_text(size = text.size, margin = margin(t = 5, r = 0, b = 0, l = -7))) + 
+    theme(legend.position='none')+
+    theme(plot.title=element_blank()) +
+    ggtitle(NULL) +
+      theme(plot.margin = margin(t = 0,  # Top margin
+                             r = 3,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) # Left margin
+  )
+  dev.off()
+```
+
+
+### Fig2 - aged only - good dimensions correct
+```{r}
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+
+
+pdf(file = paste(dir1, 'trajectory_Aged', '.pdf', sep = "") ,width = 2.03, height = 1.8)
+
+text.size <- 8
+  print(
+          plot_cells(cds.master[,which(cds.master@colData$condition.id == 'Aged')], cell_size = .3, color_cells_by = 'condition.id',
+             trajectory_graph_segment_size = 0.35, 
+             graph_label_size = 0, 
+             label_principal_points = F, 
+             label_cell_groups = F, 
+             label_branch_points = F, 
+             label_leaves = F, 
+             label_roots = F, 
+             labels_per_group = F)   + scale_color_manual(values = mets.cols[1]) + 
+    theme_classic() + 
+    theme(axis.text.x = element_text(size = text.size)) +     
+    theme(axis.text.y = element_text(size = text.size)) +
+    theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_text(size = text.size, margin = margin(t = 5, r = 0, b = 0, l = -7))) + 
+    theme(legend.position='none')+
+    theme(plot.title=element_blank()) +
+    ggtitle(NULL) +
+      theme(plot.margin = margin(t = 0,  # Top margin
+                             r = 3,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) # Left margin
+  )
+  dev.off()
+```
+
+### Fig2 - 0dpi only - good dimensions correct
+```{r}
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+
+
+pdf(file = paste(dir1, 'trajectory_0dpi', '.pdf', sep = "") ,width = 2.03, height = 1.8)
+
+text.size <- 8
+  print(
+          plot_cells(cds.master[,which(cds.master@colData$injury.dpi == '0dpi')], cell_size = .3, color_cells_by = 'injury.dpi',
+             trajectory_graph_segment_size = 0.35, 
+             graph_label_size = 0, 
+             label_principal_points = F, 
+             label_cell_groups = F, 
+             label_branch_points = F, 
+             label_leaves = F, 
+             label_roots = F, 
+             labels_per_group = F)   + scale_color_manual(values = hue_pal()(3)[1]) + 
+    theme_classic() + 
+    theme(axis.text.x = element_text(size = text.size)) +     
+    theme(axis.text.y = element_text(size = text.size)) +
+    theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_text(size = text.size, margin = margin(t = 5, r = 0, b = 0, l = -7))) + 
+    theme(legend.position='none')+
+    theme(plot.title=element_blank()) +
+    ggtitle(NULL) +
+      theme(plot.margin = margin(t = 0,  # Top margin
+                             r = 3,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) # Left margin
+  )
+  dev.off()
+```
+
+### Fig2 - 4dpi only - good dimensions correct
+```{r}
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+
+
+pdf(file = paste(dir1, 'trajectory_4dpi', '.pdf', sep = "") ,width = 2.03, height = 1.8)
+
+text.size <- 8
+  print(
+          plot_cells(cds.master[,which(cds.master@colData$injury.dpi == '4dpi')], cell_size = .3, color_cells_by = 'injury.dpi',
+             trajectory_graph_segment_size = 0.35, 
+             graph_label_size = 0, 
+             label_principal_points = F, 
+             label_cell_groups = F, 
+             label_branch_points = F, 
+             label_leaves = F, 
+             label_roots = F, 
+             labels_per_group = F)   + scale_color_manual(values = hue_pal()(3)[2]) + 
+    theme_classic() + 
+    theme(axis.text.x = element_text(size = text.size)) +     
+    theme(axis.text.y = element_text(size = text.size)) +
+    theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_text(size = text.size, margin = margin(t = 5, r = 0, b = 0, l = -7))) + 
+    theme(legend.position='none')+
+    theme(plot.title=element_blank()) +
+    ggtitle(NULL) +
+      theme(plot.margin = margin(t = 0,  # Top margin
+                             r = 3,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) # Left margin
+  )
+  dev.off()
+```
+
+### Fig2 - 7dpi only - good dimensions correct
+```{r}
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+
+
+pdf(file = paste(dir1, 'trajectory_7dpi', '.pdf', sep = "") ,width = 2.03, height = 1.8)
+
+text.size <- 8
+  print(
+          plot_cells(cds.master[,which(cds.master@colData$injury.dpi == '7dpi')], cell_size = .3, color_cells_by = 'injury.dpi',
+             trajectory_graph_segment_size = 0.35, 
+             graph_label_size = 0, 
+             label_principal_points = F, 
+             label_cell_groups = F, 
+             label_branch_points = F, 
+             label_leaves = F, 
+             label_roots = F, 
+             labels_per_group = F)   + scale_color_manual(values = hue_pal()(3)[3]) + 
+    theme_classic() + 
+    theme(axis.text.x = element_text(size = text.size)) +     
+    theme(axis.text.y = element_text(size = text.size)) +
+    theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_text(size = text.size, margin = margin(t = 5, r = 0, b = 0, l = -7))) + 
+    theme(legend.position='none')+
+    theme(plot.title=element_blank()) +
+    ggtitle(NULL) +
+      theme(plot.margin = margin(t = 0,  # Top margin
+                             r = 3,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) # Left margin
+  )
+  dev.off()
+```
+
+### FigS5 - normal trajetroy - branch1 only - good dimensions correct
+```{r}
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+
+
+pdf(file = paste(dir1, 'trajectory_full_trajectory_branch1_only', '.pdf', sep = "") ,width = 2.03, height = 1.8)
+
+text.size <- 8
+  print(
+          plot_cells(cds.master[,which(cds.master@colData$branch.path == 'branch1')], cell_size = .3, color_cells_by = 'condition.id',
+             trajectory_graph_segment_size = 0.35, 
+             graph_label_size = 0, 
+             label_principal_points = F, 
+             label_cell_groups = F, 
+             label_branch_points = F, 
+             label_leaves = F, 
+             label_roots = F, 
+             labels_per_group = F)   + scale_color_manual(values = mets.cols) + 
+    theme_classic() + 
+    theme(axis.text.x = element_text(size = text.size)) +     
+    theme(axis.text.y = element_text(size = text.size)) +
+    theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_text(size = text.size, margin = margin(t = 5, r = 0, b = 0, l = -7))) + 
+    theme(legend.position='none')+
+    theme(plot.title=element_blank()) +
+    ggtitle(NULL) +
+      theme(plot.margin = margin(t = 0,  # Top margin
+                             r = 3,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) # Left margin
+  )
+  dev.off()
+```
+
+### FigS5 - normal trajetroy - branch2 only - good dimensions correct
+```{r}
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+
+
+pdf(file = paste(dir1, 'trajectory_full_trajectory_branch2_only', '.pdf', sep = "") ,width = 2.03, height = 1.8)
+
+text.size <- 8
+  print(
+          plot_cells(cds.master[,which(cds.master@colData$branch.path == 'branch2')], cell_size = .3, color_cells_by = 'condition.id',
+             trajectory_graph_segment_size = 0.35, 
+             graph_label_size = 0, 
+             label_principal_points = F, 
+             label_cell_groups = F, 
+             label_branch_points = F, 
+             label_leaves = F, 
+             label_roots = F, 
+             labels_per_group = F)   + scale_color_manual(values = mets.cols) + 
+    theme_classic() + 
+    theme(axis.text.x = element_text(size = text.size)) +     
+    theme(axis.text.y = element_text(size = text.size)) +
+    theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_text(size = text.size, margin = margin(t = 5, r = 0, b = 0, l = -7))) + 
+    theme(legend.position='none')+
+    theme(plot.title=element_blank()) +
+    ggtitle(NULL) +
+      theme(plot.margin = margin(t = 0,  # Top margin
+                             r = 3,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) # Left margin
+  )
+  dev.off()
+```
+
+### FigS5 - Trying to flip Branch2 trajectory -  good dimensions
+```{r}
+cds.branch2.full.tmp <- cds.branch2.full
+cds.branch2.full.tmp@colData$branch2.clusters <- cds.branch2.full.tmp@clusters@listData$UMAP$clusters
+
+
+cds.branch2.sub <- cds.branch2.full.tmp[, which(as.vector(as.numeric(cds.branch2.full.tmp@colData$branch2.clusters)) != 7 & 
+                                                as.vector(as.numeric(cds.branch2.full.tmp@colData$branch2.clusters)) != 9)] #&
+                                                #as.vector(as.numeric(cds.branch2.full.tmp@colData$branch2.clusters)) != 4)]
+
+plot1 <- plot_cells(cds.branch2.sub, label_groups_by_cluster=TRUE, cell_size = 1.2, trajectory_graph_segment_size = 1.2, graph_label_size = 3, label_principal_points = F, label_cell_groups = F, label_branch_points = F, label_roots = F, label_leaves = F, color_cells_by = 'condition.id') + scale_color_manual(values = mets.cols)
+
+plot.obj <- data.frame(dim1 = plot1$data$data_dim_1, 
+                       dim2 = plot1$data$data_dim_2,
+                       condition.id = plot1$data$condition.id)
+
+plot.obj$dim2 <- plot.obj$dim2 * -1
+
+
+
+plot.shuffled <- plot.obj[sample(1:nrow(plot.obj)), ]
+
+#ggplot(pseudoitme.colored.trajectory.shuffled, aes(x = dim1, y = dim2)) + geom_point(aes(fill = dim5 ), stroke = .5, shape = 21, size = 9, alpha = 0.9, color = "gray21") +scale_fill_gradient(low = "gray89", high = "darkolivegreen4") + theme_classic()
+# 
+# ggplot(plot.shuffled, aes(x = dim1, y = dim2)) + geom_point(aes(color = condition.id ), stroke = 0.05, size = 4, alpha = 0.5, fill = 'black') + 
+#   scale_color_manual(values = mets.cols) + 
+#   theme_classic() +
+#   theme(axis.text.x = element_text(size = 20)) +
+#   theme(axis.text.y = element_text(size = 20)) +
+#   theme(axis.title.x = element_text(size = 28)) +
+#   theme(axis.title.y = element_text(size = 28)) + 
+#   theme(legend.text=element_text(size=20)) +
+#   theme(legend.title=element_text(size=20)) +
+#   xlab("component 1") + ylab("component 2") + 
+#   labs(fill = "condition.id")
+#   #guides(fill=guide_legend(title="Pseudotime"))
+# 
+# #
+
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+
+
+pdf(file = paste(dir1, 'trajectory_full_trajectory_branch2_only_flipped', '.pdf', sep = "") ,width = 2.03, height = 1.8)
+
+text.size <- 8
+  print(
+          plot_cells(cds.branch2.sub, cell_size = .3, color_cells_by = 'condition.id',
+             trajectory_graph_segment_size = 0.35, 
+             graph_label_size = 0, 
+             label_principal_points = F, 
+             label_cell_groups = F, 
+             label_branch_points = F, 
+             label_leaves = F, 
+             label_roots = F, 
+             labels_per_group = F)   + scale_color_manual(values = mets.cols) +  
+    scale_color_manual(values = mets.cols) + 
+    theme_classic() + 
+    theme(axis.text.x = element_text(size = text.size)) +     
+    theme(axis.text.y = element_text(size = text.size)) +
+    theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_text(size = text.size, margin = margin(t = 5, r = 0, b = 0, l = -7))) + 
+    theme(legend.position='none')+
+    theme(plot.title=element_blank()) +
+    ggtitle(NULL) +
+      theme(plot.margin = margin(t = 0,  # Top margin
+                             r = 3,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) # Left margin
+  )
+```
+
+### FigS5 - Myh3/Myh8 subset -  good dimensions
+### FigS4 - Myh1/Myh4 subset -  good dimensions
+
+```{r}
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+
+#genelist <- c( "Myh8", "Myh3")
+genelist <- c( "Myh1", "Myh4", 'Egfr')
+
+
+for (i in 1:length(genelist))
+{
+  pdf(file = paste(dir1, 'trajectory_', genelist[i], '.pdf', sep = "") ,width = 2.3, height = 1.8)
+
+text.size <- 8
+  print(
+    #plot_cells(cds.branch2.full, label_groups_by_cluster=F, cell_size = .3, alpha = 0.6,
+    plot_cells(cds.master, label_groups_by_cluster=F, cell_size = .3, alpha = 0.6,
+             trajectory_graph_segment_size = 0.35, 
+             graph_label_size = 0, 
+             label_principal_points = F, 
+             label_cell_groups = F, 
+             label_branch_points = F, 
+             label_leaves = F, 
+             label_roots = F, 
+             labels_per_group = F,
+             genes = genelist[i], 
+             scale_to_range = T) + 
+    theme_classic() + 
+    theme(axis.text.x = element_text(size = text.size)) +     
+    theme(axis.text.y = element_text(size = text.size)) +
+    theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_text(size = text.size, margin = margin(t = 0, r = 0, b = 0, l = -8))) + 
+    theme(legend.text=element_text(size=8))+
+    theme(legend.title=element_text(size = 8), 
+          legend.position = ) + 
+    theme(plot.title=element_blank()) +
+    theme(legend.key.size = unit(.25, "cm"),
+          legend.margin=margin(0,0,0,0),
+          legend.box.margin=margin(0,0,0,-14)) +
+    ggtitle("tests") +
+      theme(plot.margin = margin(t = -17.5,  # Top margin
+                             r = 3,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) # Left margin
+  )
+
+dev.off()
+}
+```
+
+
+### Fig S4 -- other self-renewal genes
+```{r}
+plot_cells(cds.master, genes = "Egfr",scale_to_range = T)
+plot_cells(cds.master, genes = "Myod1",scale_to_range = T, cell_size = 1.3)
+plot_cells(cds.master, genes = "Myh1",scale_to_range = T, cell_size = 1.3)
+plot_cells(cds.master, genes = "Myh4",scale_to_range = T, cell_size = 1.3)
+
+```
+
+
+
+### Fig3 -- TF and upstream gene plot
+
+### Branch2
+```{r}
+#branc2_Archs4_TFs <- upstream.tf.plotting.fun(enrich.df.filepath =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch2_arch4TF.csv", 
+                          sce = sce.branch2.aged.young.FULL,
+                          print.list = T)
+upstream.tf.plotting.fun(enrich.df.filepath =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch2_arch4TF.csv", 
+                         sce = sce.branch2.aged.young.FULL,
+                         print.list = F)
+```
+
+
+
+
+### Fig4 -- tradeseq plots -- good dimensions
+```{r}
+load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/sce_branch2_sub1_aged_young.RData")
+
+### Reading in panther file
+
+result <- fromJSON(file = "~/Downloads/myonuclear_subset_GO_process.json")
+
+pathway.list <- list()
+for (category in 1:length(result$overrepresentation$group))
+{
+  for (sub.category in 1:length(result$overrepresentation$group[[category]]$result))
+  {
+    
+  if (is.numeric(result$overrepresentation$group[[category]]$result$number_in_reference) == TRUE) {
+    genelist <- result$overrepresentation$group[[category]]$result$input_list$mapped_id_list$mapped_id
+    name <- paste(result$overrepresentation$group[[category]]$result$term$label, result$overrepresentation$group[[category]]$result$input_list$fold_enrichment, sep = '_')
+    pathway.list[[name]] <- genelist
+  }
+    
+    else{
+    genelist <- result$overrepresentation$group[[category]]$result[[sub.category]]$input_list$mapped_id_list$mapped_id
+    name <- paste(result$overrepresentation$group[[category]]$result[[sub.category]]$term$label, as.numeric(result$overrepresentation$group[[category]]$result[[sub.category]]$input_list$fold_enrichment), sep = '_')
+    pathway.list[[name]] <- genelist
+    }
+  }
+}
+
+```
+
+```{r}
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+  pdf(file = paste(dir1, 'gene_pseudotime_plot_', 'cell_differentiation_branch2_subset', '.pdf', sep = "") ,width = 2.4, height = 1.4)
+
+text.size <- 8
+  print(
+gene.plotting.function(genelist = pathway.list$`cell differentiation_1.60916172827041`, 
+                       sce = sce.branch2.sub1.aged.young, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F))
+```
+
+```{r}
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+  pdf(file = paste(dir1, 'gene_pseudotime_plot_', 'myofibril_assembly', '_branch2_subset', '.pdf', sep = "") ,width = 2.4, height = 1.4)
+
+text.size <- 8
+  print(
+gene.plotting.function(genelist = pathway.list$`skeletal myofibril assembly_13.2346733668342`, 
+                       sce = sce.branch2.sub1.aged.young, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F))
+```
+
+```{r}
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+  pdf(file = paste(dir1, 'gene_pseudotime_plot_', 'sarcomere_organization', '_branch2_subset', '.pdf', sep = "") ,width = 2.4, height = 1.4)
+
+text.size <- 8
+  print(
+gene.plotting.function(genelist = pathway.list$`sarcomere organization_6.88633410957225`, 
+                       sce = sce.branch2.sub1.aged.young, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F))
+```
+
+```{r}
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+  pdf(file = paste(dir1, 'gene_pseudotime_plot_', 'nmj_dev', '_branch2_subset', '.pdf', sep = "") ,width = 2.4, height = 1.4)
+
+text.size <- 8
+  print(
+gene.plotting.function(genelist = pathway.list$`neuromuscular junction development_4.23509547738694`, 
+                       sce = sce.branch2.sub1.aged.young, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F))
+```
+
+
+
+
+```{r}
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+  pdf(file = paste(dir1, 'gene_pseudotime_plot_', 'actin_mediated_cell_contraction', '_branch2_subset', '.pdf', sep = "") ,width = 2.4, height = 1.4)
+
+text.size <- 8
+  print(
+gene.plotting.function(genelist = pathway.list$`actin-mediated cell contraction_3.34669901230289`,
+                       sce = sce.branch2.sub1.aged.young, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F))
+```
+
+```{r}
+
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+  #pdf(file = paste(dir1, 'gene_pseudotime_plot_', 'actin_mediated_cell_contraction', '_branch2_subset', '.pdf', sep = "") ,width = 2.4, height = 1.4)
+
+text.size <- 8
+  print(
+gene.plotting.function(genelist = pathway.list$`pyruvate metabolic process_4.26924947317231`,
+                       sce = sce.branch2.sub1.aged.young, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F))
+  
+    print(
+gene.plotting.function(genelist = pathway.list$`pyruvate metabolic process_4.26924947317231`,
+                       sce = sce.branch2.sub1.aged.young, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F))
+    
+result <- fromJSON(file = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/json_files/Myonuclear_subset_panther_cellular_component.json")
+
+
+pathway.list.component <- list()
+for (category in 1:length(result$overrepresentation$group))
+{
+  for (sub.category in 1:length(result$overrepresentation$group[[category]]$result))
+  {
+    
+  if (is.numeric(result$overrepresentation$group[[category]]$result$number_in_reference) == TRUE) {
+    genelist <- result$overrepresentation$group[[category]]$result$input_list$mapped_id_list$mapped_id
+    name <- result$overrepresentation$group[[category]]$result$term$label
+    pathway.list.component[[name]] <- genelist
+  }
+    
+    else{
+    genelist <- result$overrepresentation$group[[category]]$result[[sub.category]]$input_list$mapped_id_list$mapped_id
+    name <- result$overrepresentation$group[[category]]$result[[sub.category]]$term$label
+    pathway.list.component[[name]] <- genelist
+    }
+  }
+}
+
+    print(
+gene.plotting.function(genelist = pathway.list.component$`contractile fiber`,
+                       sce = sce.branch2.sub1.aged.young, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F))
+    
+    
+    
+    
+result <- fromJSON(file = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/json_files/Myonuclear_subset_panther_molecular_function.json")
+pathway.list.function <- list()
+for (category in 1:length(result$overrepresentation$group))
+{
+  for (sub.category in 1:length(result$overrepresentation$group[[category]]$result))
+  {
+    
+  if (is.numeric(result$overrepresentation$group[[category]]$result$number_in_reference) == TRUE) {
+    genelist <- result$overrepresentation$group[[category]]$result$input_list$mapped_id_list$mapped_id
+    name <- result$overrepresentation$group[[category]]$result$term$label
+    pathway.list.function[[name]] <- genelist
+  }
+    
+    else{
+    genelist <- result$overrepresentation$group[[category]]$result[[sub.category]]$input_list$mapped_id_list$mapped_id
+    name <- result$overrepresentation$group[[category]]$result[[sub.category]]$term$label
+    pathway.list.function[[name]] <- genelist
+    }
+  }
+}
+
+    print(
+gene.plotting.function(genelist = pathway.list.function$`muscle alpha-actinin binding`,
+                       sce = sce.branch2.sub1.aged.young, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F))
+```
+
+### Fig3 --- trajectory plots distributions - dimensions
+```{r}
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+# branch1_archs4tf_TFs <- upstream.tf.plotting.fun(enrich.df.filepath =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/ARCHS4_TFs_Coexp_table_BRANCH1.csv", sce = sce.branch1.aged.young.FULL, print.list = T)
+
+
+
+ 
+ plot1 <- gene.plotting.function(genelist = branch1_archs4tf_TFs$`TBX3 human tf ARCHS4 coexpression`,
+                       sce = sce.branch1.aged.young.FULL, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F, size = 1) 
+
+  pdf(file = paste(dir1, 'gene_pseudotime_plot_', 'SMAD4', '_branch1', '.pdf', sep = "") ,width = 1.3, height = 1.1)
+
+  
+text.size <- 8
+
+  print(plot1 +
+          theme(legend.position = 'none')+
+          theme(plot.margin = margin(t = 0,  # Top margin
+                             r = 0,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) ) # Left margin
+
+
+dev.off()
+```
+### Branch2
+```{r}
+branch2_Archs4_TFs <- upstream.tf.plotting.fun(enrich.df.filepath =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch2_arch4TF.csv",
+                          sce = sce.branch2.sub1.aged.young,
+                          print.list = T)
+
+
+
+upstream.tf.plotting.fun(enrich.df.filepath =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/branch2_arch4TF.csv", 
+                         sce = sce.branch2.sub1.aged.young,
+                         print.list = F)
+
+```
+
+```{r}
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+# branch1_archs4tf_TFs <- upstream.tf.plotting.fun(enrich.df.filepath =  "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/ARCHS4_TFs_Coexp_table_BRANCH1.csv", sce = sce.branch1.aged.young.FULL, print.list = T)
+
+
+
+ 
+ plot1 <- gene.plotting.function(genelist = branch2_archs4tf_TFs$`MEOX2 human tf ARCHS4 coexpression`,
+                       sce = sce.branch2.sub1.aged.young, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F, size = 1) 
+
+  pdf(file = paste(dir1, 'gene_pseudotime_plot_', 'MEOX2', '_branch1', '.pdf', sep = "") ,width = 1.3, height = 1.1)
+
+  
+text.size <- 8
+
+  print(plot1 +
+          theme(legend.position = 'none')+
+          theme(plot.margin = margin(t = 0,  # Top margin
+                             r = 0,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) ) # Left margin
+
+
+dev.off()
+```
+
+```{r}
+branch2.group1.TFs.correct <-  c("TBX15", 'MYOD1', 'MYOG', 'MEF2C', 'MYF6', 'RXRG', 'SIX1', 'LBX1', 'DPF3','PPP2R3B', 'MEF2A', 'NR1D2', 'SIX4', 'RBM20', 'PITX2', 'ZBTB16', 'CUL4A', 'FOXN3', 'TBX20', 'TEAD1' , 'MITF', 'SIM1', 'ZNF41', 'SIM1' )
+  branch2.group1.TFs.correct <- unique(branch2.group1.TFs.correct)
+  
+branch2.group2.TFs.correct<- c('RORC','ZBTB47', 'HOXC10','MAFA', 'NFE2L1', 'KLF9', 'DMRT2', 'GBX1', 'PITX3','TEAD4', 'SORBS2', 'HOXA10', 'HEYL', 'ESRRA', 'DVL1', 'KCMF1', 'ZBTB38', 'BNC2', 'AFF4', 'MYF5', 'NFIX', 'PRRX1', 'ZHX3', 'MLXIP', 'NFAT5', 'ZNF784', 'ZNF704', 'ZBTB38', 'PRRX1', 'ZHX3', 'MLXIP' )
+branch2.group2.TFs.correct <- unique(branch2.group2.TFs.correct)
+
+
+
+branch2.group3.TFs.correct<- c('SORBS2', 'HEYL', 'ZBTB38', 'BNC2', 'PRRX1', 'ZHX3','ZNF784' ,  "ZNF704")
+branch2.group3.TFs.correct <- unique(branch2.group3.TFs.correct)
+
+branch2.group2.TFs.correct <- branch2.group2.TFs.correct[branch2.group2.TFs.correct %nin% branch2.group3.TFs.correct]
+
+```
+
+### Branch2.subset.group1
+```{r}
+text.size <- 8
+
+TF.list <- branch2.group1.TFs.correct[branch2.group1.TFs.correct %nin% branch2.group2.TFs.correct]
+for (i in 1:length(TF.list))
+{
+  print(gene.plotting.function(genelist = branch2_Archs4_TFs[grep(TF.list[i], names(branch2_Archs4_TFs) )][[1]], 
+                       sce = sce.branch2.sub1.aged.young, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F, size = 1) )
+}
+```
+
+### Branch2.subset.group1 -- saving
+```{r}
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+
+text.size <- 8
+
+for (i in 1:length(branch2.group1.TFs.correct))
+{
+  plot1 <- gene.plotting.function(genelist = branch2_Archs4_TFs[grep(branch2.group1.TFs.correct[i], names(branch2_Archs4_TFs) )][[1]], 
+                       sce = sce.branch2.sub1.aged.young, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F, size = 1) 
+    
+  pdf(file = paste(dir1, 'gene_pseudotime_plot_','GROUP1_', branch2.group1.TFs.correct[i],  '_branch1', '.pdf', sep = "") ,width = 1.3, height = 1.1)
+    print(plot1 +
+          theme(legend.position = 'none')+
+          theme(plot.margin = margin(t = 0,  # Top margin
+                             r = 2,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) ) # Left margin
+    dev.off()
+}
+
+
+```
+
+### branch2.group2.TFs.correct
+```{r}
+TF.list <- branch2.group2.TFs.correct[branch2.group2.TFs.correct %nin% branch2.group1.TFs.correct]
+TF.list <- TF.list[branch2.group2.TFs.correct %nin% branch2.group3.TFs.correct]
+for (i in 1:length(TF.list))
+{
+  gene.plotting.function(genelist = branch2_Archs4_TFs[grep(TF.list[i], names(branch2_Archs4_TFs) )][[1]], 
+                       sce = sce.branch2.sub1.aged.young, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F, size = 1) 
+}
+
+```
+
+### branch2.group3.TFs.correct
+```{r}
+TF.list <- branch2.group3.TFs.correct
+for (i in 1:length(TF.list))
+{
+  gene.plotting.function(genelist = branch2_Archs4_TFs[grep(TF.list[i], names(branch2_Archs4_TFs) )][[1]], 
+                       sce = sce.branch2.sub1.aged.young, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F, size = 1) 
+}
+
+```
+### Branch2.subset.group2.trimmed -- SAVING
+```{r}
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+branch2.group2.TFs.correct.trimmed <- c( 'SORBS2',  'ESRRA', 'DVL1', 'KCMF1', 'ZBTB38', 'BNC2', 'AFF4', 'MYF5', 'NFIX', ' ZHX3', 'MLXIP', 'NFAT5' )
+text.size <- 8
+
+for (i in 1:length(branch2.group2.TFs.correct.trimmed))
+{
+  plot1 <- gene.plotting.function(genelist = branch2_Archs4_TFs[grep(branch2.group2.TFs.correct.trimmed[i], names(branch2_Archs4_TFs) )][[1]], 
+                       sce = sce.branch2.sub1.aged.young, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F, size = 1) 
+    
+  pdf(file = paste(dir1, 'gene_pseudotime_plot_', 'GROUP2_', branch2.group2.TFs.correct.trimmed[i],  '_branch1', '.pdf', sep = "") ,width = 1.3, height = 1.1)
+    print(plot1 +
+          theme(legend.position = 'none')+
+          theme(plot.margin = margin(t = 0,  # Top margin
+                             r = 2,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) ) # Left margin
+    dev.off()
+}
+
+```
+
+```{r}
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+ plot1 <- gene.plotting.function(genelist = branch1_archs4tf_TFs$`TBX3 human tf ARCHS4 coexpression`,
+                       sce = sce.branch1.aged.young.FULL, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F, size = 1) 
+
+  pdf(file = paste(dir1, 'gene_pseudotime_plot_', 'TBX3', '_branch1', '.pdf', sep = "") ,width = 1.3, height = 1.1)
+
+  
+text.size <- 8
+
+  print(plot1 +
+          theme(legend.position = 'none')+
+          theme(plot.margin = margin(t = 0,  # Top margin
+                             r = 0,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) ) # Left margin
+
+
+dev.off()
+```
+
+```{r}
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+
+ plot1 <- gene.plotting.function(genelist = branch2_Archs4_TFs$`NFAT5 human tf ARCHS4 coexpression`,
+                       sce = sce.branch2.sub1.aged.young, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F, size = 1) 
+
+  pdf(file = paste(dir1, 'gene_pseudotime_plot_', 'NFAT5', '_branch2_subset', '.pdf', sep = "") ,width = 1.3, height = 1.1)
+
+  
+text.size <- 8
+
+  print(plot1 +
+          theme(legend.position = 'none')+
+          theme(plot.margin = margin(t = 0,  # Top margin
+                             r = 0,  # Right margin
+                             b = 0,  # Bottom margin
+                             l = 0)) ) # Left margin
+
+
+dev.off()
+```
+
+
+### Fig3 Q --- overlap of Branch1 and Branch2 TFs
+```{r}
+tmp1<- c(branch2.group2.TFs.correct, branch2.group1.TFs.correct, branch2.group3.TFs.correct) 
+tmp2 <- c(branch1.)
+```
+
+#### Looking at trajectory plots from heatmap -- branch1
+```{r}
+TF.list <- c("HOXC10", "SIX1", "MYOG")
+for (i in 1:length(TF.list))
+{
+  genelist <- branch1_archs4tf_TFs[grep(TF.list[i], names(branch1_archs4tf_TFs))][[1]]
+  
+  gene.plotting.function(genelist = genelist, 
+                       sce = sce.branch1.aged.young.FULL, 
+                       print.list = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F, 
+                       title = as.character(TF.list[i]))
+}
+  
+```
+
+
+### branch1 7dpi vs branch2 7dpi 
+```{r}
+seurat.dpi7 <- updated.seurat[, which(updated.seurat$injury.dpi == '7dpi')]
+
+seurat.dpi7 <- SetIdent(seurat.dpi7, value = 'branch.path')
+
+
+branch.7dpi.markers %>% arrange(avg_log2FC)
+
+branch.7dpi.markers[grep("Mest", rownames(branch.7dpi.markers)), ]
+branch.7dpi.markers[grep("Itm2a", rownames(branch.7dpi.markers)), ]
+branch.7dpi.markers[grep("Ncoa7", rownames(branch.7dpi.markers)), ]
+branch.7dpi.markers[grep("Mgp", rownames(branch.7dpi.markers)), ]
+
+
+write.csv(branch.7dpi.markers, 
+          file = "~/Desktop/snRNAseq/PNAS_resubmission/tables/v1/TableS5_branch1_vs_branch2_7dpi_self_renewal.csv")
+
+```
+
+### Unique genes in TF lists
+```{r}
+unlist.genes <- as.vector(unlist(branch2_archs4tf_TFs))
+
+length(unlist.genes)
+length(unique(unlist.genes))
+
+unlist.genes <- as.vector(unlist(branch1_archs4tf_TFs))
+
+length(unlist.genes)
+length(unique(unlist.genes))
+
+```
+

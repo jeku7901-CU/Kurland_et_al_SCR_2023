@@ -1,0 +1,1167 @@
+### Using all 30 subsamples
+```{r}
+dir <- "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/DTW_bootstrapping/"
+```
+
+```{r}
+for (i in 1:30)
+{
+  dtw.obj <- read.delim(file  = paste(dir, list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/DTW_bootstrapping/")[i], '/', 
+                                      list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/DTW_bootstrapping/")[i], '_DTW.out', sep = ""), skip = 2)
+
+  dtw.obj <- dtw.obj[-1,]
+
+  title = 'more subsamples'
+  dtw.obj <- cbind(dtw.obj, data.frame(time = seq(1:nrow(dtw.obj)),
+                                difference = dtw.obj$Y_pt - dtw.obj$A_pt))
+  
+
+  dtw.obj <- cbind(dtw.obj, 
+        Y_pt.norm = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt )),
+        A_pt.norm = c(dtw.obj$A_pt / max(dtw.obj$A_pt )), 
+        norm.dff = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt ) - c(dtw.obj$A_pt / max(dtw.obj$A_pt ))),
+        subsample = i)
+  
+
+  dtw.obj.combined <- rbind(dtw.obj.combined, dtw.obj)
+}
+
+mean.obj.young <- c()
+mean.obj.aged <- c()
+for (i in 1:5776)
+  {
+    mean.obj.young <- c(mean.obj.young, mean(dtw.obj.combined$Y_pt[which(dtw.obj.combined$time == as.numeric(i))]))
+        mean.obj.aged <- c(mean.obj.aged, mean(dtw.obj.combined$A_pt[which(dtw.obj.combined$time == as.numeric(i))]))
+}
+
+  mean.df <- data.frame(Y_pt = mean.obj.young,
+                        A_pt = mean.obj.aged)
+  
+  mean.df.time.plot.full <- cbind(mean.df, 
+                             time = seq(1:nrow(mean.df)),
+                             difference = mean.df$Y_pt - mean.df$A_pt)
+
+  
+print(ggplot() +
+                       geom_rect(aes(xmin = 5, xmax = 35, ymin = 5, ymax = 35), alpha = 0.5, fill = 'gray', color = 'black', stroke = .4) +
+               geom_rect(aes(xmin = 70, xmax = 118, ymin = 69, ymax = 118), alpha = 0.5, fill = 'gray', color = 'black', stroke = .4) +
+               geom_vline(xintercept = dtw.obj$Y_pt[which(dtw.obj$Y_pt > 50 & dtw.obj$Y_pt < 53)][1], color = 'chartreuse3', size = 1.5) + 
+          geom_vline(xintercept = dtw.obj$Y_pt[which(dtw.obj$Y_pt > 60 & dtw.obj$Y_pt < 63)][1], color = 'chartreuse3', size = 1.5) +
+      geom_line(data = dtw.obj.combined, aes(x = Y_pt, y = A_pt, color = as.factor(subsample)), size = 2, alpha = 0.3)  + 
+        scale_color_manual(values = rep('gray', 30))+
+      geom_line(data = mean.df, aes(x = Y_pt, y = A_pt), color = "black", size = 3)  + 
+                       geom_abline(intercept = 0, slope = 1, color = 'red', size = 1, linetype = 'dashed') +
+      geom_line(size = 2)  +
+      theme_classic() +
+
+      ggtitle(title) +
+      theme(plot.title = element_text(size = 20, face = "bold"))
+      )
+       
+       ### Time plot try 2
+print(ggplot() +
+      geom_line(data = dtw.obj.combined, aes(x = time, y = difference, color = as.factor(subsample)), size = 1, alpha = 0.3)  + 
+        scale_color_manual(values = rep('gray', 30))+
+       geom_line(data = mean.df.time.plot.full, aes(x = time, y = difference), color = "black", size = 1.5)  + 
+       theme_classic() +           
+       geom_hline(yintercept = 0, linetype = 'dashed', color = 'red') + 
+          geom_vline(size = 1,xintercept = mean.df.time.plot.full$time[which(mean.df.time.plot.full$Y_pt > 50 & mean.df.time.plot.full$Y_pt < 51)][1], color = 'chartreuse3') + 
+          geom_vline(size = 1, xintercept = mean.df.time.plot.full$time[which(mean.df.time.plot.full$Y_pt > 63 & mean.df.time.plot.full$Y_pt < 64)][1], color = 'chartreuse3')
+  )
+```
+
+### BRANCH1 Biggest diff
+```{r}
+title = 'Branch1_subset'
+dir <- "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/DTW_bootstrapping/"
+#setwd(dir)
+
+dtw.obj.combined <- data.frame()
+
+for (i in 1:10)
+#for (i in 1:2)
+{
+  
+  #new.dir <- paste(list.files(include.dirs = T, path = dir)[i], '/', list.files()[i], '_DTW.out', sep = "")
+  
+  dtw.obj <- read.delim(file  = paste(dir, list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/DTW_bootstrapping/")[i], '/', 
+                                      list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/DTW_bootstrapping/")[i], '_DTW.out', sep = ""), skip = 2)
+
+  dtw.obj <- dtw.obj[-1,]
+
+  title = title
+  dtw.obj <- cbind(dtw.obj, data.frame(time = seq(1:nrow(dtw.obj)),
+                                difference = dtw.obj$Y_pt - dtw.obj$A_pt))
+  
+  # print(ggplot(dtw.obj) + geom_line(aes(x = time, y = difference), size = 1)  + theme_classic()  + geom_hline(yintercept = 0))
+  
+
+  dtw.obj <- cbind(dtw.obj, 
+        Y_pt.norm = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt )),
+        A_pt.norm = c(dtw.obj$A_pt / max(dtw.obj$A_pt )), 
+        norm.dff = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt ) - c(dtw.obj$A_pt / max(dtw.obj$A_pt ))),
+        subsample = i)
+  
+  ### biggest.diff
+   dtw.obj <- dtw.obj[which(dtw.obj$Y_pt < 55),]
+  
+  dtw.obj.combined <- rbind(dtw.obj.combined, dtw.obj)
+}
+
+  mean.obj.young <- c()
+  mean.obj.aged <- c()
+  for (i in 1:max(dtw.obj.combined$time)){
+    mean.obj.young <- c(mean.obj.young, mean(dtw.obj.combined$Y_pt[which(dtw.obj.combined$time == as.numeric(i))]))
+        mean.obj.aged <- c(mean.obj.aged, mean(dtw.obj.combined$A_pt[which(dtw.obj.combined$time == as.numeric(i))]))
+  }
+  mean.df <- data.frame(Y_pt = mean.obj.young,
+                        A_pt = mean.obj.aged)
+  
+  mean.df.time.plot <- cbind(mean.df, 
+                             time = seq(1:nrow(mean.df)),
+                             difference = mean.df$Y_pt - mean.df$A_pt)
+  ggplot(mean.df.time.plot) + geom_line(aes(x = time, y = difference), size = 1)  + theme_classic()  + geom_hline(yintercept = 0)
+
+dtw.obj.combined.branch1 <- dtw.obj.combined
+
+       print(ggplot() +
+      geom_line(data = dtw.obj.combined, aes(x = Y_pt, y = A_pt, color = as.factor(subsample)), size = 1, alpha = 0.5)  + 
+        scale_color_manual(values = rep('gray', 11))+
+      geom_line(data = mean.df, aes(x = Y_pt, y = A_pt), color = "goldenrod", size = 1.5)  + 
+         geom_line(size = 2)  +
+      theme_classic() +
+        geom_rect(aes(xmin = 5, xmax = 35, ymin = 5, ymax = 35), alpha = 0.2, color = 'gray') +
+      geom_abline(intercept = 0, slope = 1, color = 'black', size = .5) +
+      ggtitle(title) +
+      theme(plot.title = element_text(size = 20, face = "bold")))
+       
+       
+```
+### BRANCH2 biggest diff
+```{r}
+title = 'Branch2_n=30'
+dir <- "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/DTW_bootstrapping/"
+
+dtw.obj.combined <- data.frame()
+
+for (i in 1:30)
+{
+  dtw.obj <- read.delim(file  = paste(dir, list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/DTW_bootstrapping/")[i], '/', 
+                                      list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/DTW_bootstrapping/")[i], '_DTW.out', sep = ""), skip = 2)
+
+  dtw.obj <- dtw.obj[-1,]
+
+  title = title
+  dtw.obj <- cbind(dtw.obj, data.frame(time = seq(1:nrow(dtw.obj)),
+                                difference = dtw.obj$Y_pt - dtw.obj$A_pt))
+  
+  dtw.obj <- cbind(dtw.obj, 
+        Y_pt.norm = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt )),
+        A_pt.norm = c(dtw.obj$A_pt / max(dtw.obj$A_pt )), 
+        norm.dff = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt ) - c(dtw.obj$A_pt / max(dtw.obj$A_pt ))),
+        subsample = i)
+  
+  ### biggest.diff
+   dtw.obj <- dtw.obj[which(dtw.obj$Y_pt >55),]
+  
+  dtw.obj.combined <- rbind(dtw.obj.combined, dtw.obj)
+}
+
+  mean.obj.young <- c()
+  mean.obj.aged <- c()
+  for (i in 1:max(dtw.obj.combined$time)){
+    mean.obj.young <- c(mean.obj.young, mean(dtw.obj.combined$Y_pt[which(dtw.obj.combined$time == as.numeric(i))]))
+        mean.obj.aged <- c(mean.obj.aged, mean(dtw.obj.combined$A_pt[which(dtw.obj.combined$time == as.numeric(i))]))
+  }
+  mean.df <- data.frame(Y_pt = mean.obj.young,
+                        A_pt = mean.obj.aged)
+  
+  mean.df.time.plot <- cbind(mean.df, 
+                             time = seq(1:nrow(mean.df)),
+                             difference = mean.df$Y_pt - mean.df$A_pt)
+#  ggplot(mean.df.time.plot) + geom_line(aes(x = time, y = difference), size = 1)  + theme_classic()  + geom_hline(yintercept = 0)
+
+dtw.obj.combined.branch2 <- dtw.obj.combined
+
+
+         ggplot() +
+      geom_line(data = dtw.obj.combined, aes(x = Y_pt, y = A_pt, color = as.factor(subsample)), size = 1, alpha = 0.5)  + 
+        scale_color_manual(values = rep('gray', 30))+
+      geom_line(data = mean.df, aes(x = Y_pt, y = A_pt), color = rgb(red = 169, green = 30, blue = 64, maxColorValue = 169), size = 1.5)  + 
+         geom_line(size = 2)  +
+      theme_classic() +
+        geom_rect(aes(xmin = 70, xmax = 118, ymin = 69, ymax = 118), alpha = 0.2, color = 'gray') +
+      geom_abline(intercept = 0, slope = 1, color = 'black', size = .5) +
+      ggtitle(title) +
+      theme(plot.title = element_text(size = 20, face = "bold"))
+
+```
+
+### AUC - done correctly 
+
+##### Branch1 subset
+```{r}
+ggplot() +
+      geom_line(data = dtw.obj.combined, aes(x = time, y = difference, color = as.factor(subsample)), size = 1, alpha = 0.3)  + 
+        scale_color_manual(values = rep('gray', 30))+
+       geom_line(data = mean.df.time.plot.full, aes(x = time, y = difference), color = "black", size = 1.5)  + 
+       theme_classic() +           
+       geom_hline(yintercept = 0, linetype = 'dashed', color = 'red') + 
+          geom_vline(size = 1,xintercept = mean.df.time.plot.full$time[which(mean.df.time.plot.full$Y_pt > 50 & mean.df.time.plot.full$Y_pt < 51)][1], color = 'chartreuse3') + 
+          geom_vline(size = 1, xintercept = mean.df.time.plot.full$time[which(mean.df.time.plot.full$Y_pt > 63 & mean.df.time.plot.full$Y_pt < 64)][1], color = 'chartreuse3')
+  
+branch1.subset.auc <- mean.df.time.plot.full[which(mean.df.time.plot.full$Y_pt >= 5 & mean.df.time.plot.full$Y_pt <= 35 & mean.df.time.plot.full$A_pt >= 5 & mean.df.time.plot.full$A_pt <= 35) ,]
+
+ggplot() + geom_line(data = branch1.subset.auc, aes(x = time, y = difference), color = rgb(red = 169, green = 30, blue = 64, maxColorValue = 169), size = 1.5)  
+```
+#### Branch2 subset
+```{r}
+  ggplot() +
+      geom_line(data = dtw.obj.combined, aes(x = time, y = difference, color = as.factor(subsample)), size = 1, alpha = 0.3)  + 
+        scale_color_manual(values = rep('gray', 30))+
+       geom_line(data = mean.df.time.plot.full, aes(x = time, y = difference), color = "black", size = 1.5)  + 
+       theme_classic() +           
+       geom_hline(yintercept = 0, linetype = 'dashed', color = 'red') + 
+          geom_vline(size = 1,xintercept = mean.df.time.plot.full$time[which(mean.df.time.plot.full$Y_pt > 50 & mean.df.time.plot.full$Y_pt < 51)][1], color = 'chartreuse3') + 
+          geom_vline(size = 1, xintercept = mean.df.time.plot.full$time[which(mean.df.time.plot.full$Y_pt > 63 & mean.df.time.plot.full$Y_pt < 64)][1], color = 'chartreuse3')
+  
+branch2.subset.auc <- mean.df.time.plot.full[which(mean.df.time.plot.full$Y_pt >= 70 & mean.df.time.plot.full$Y_pt <= 118 & mean.df.time.plot.full$A_pt >= 69 & mean.df.time.plot.full$A_pt <= 118) ,]
+
+ggplot() + geom_line(data = branch2.subset.auc, aes(x = time, y = difference), color = rgb(red = 169, green = 30, blue = 64, maxColorValue = 169), size = 1.5)  
+```
+
+```{r}
+#library("bayestestR")
+
+bayestestR::area_under_curve(x = branch1.subset.auc$Y_pt, branch1.subset.auc$A_pt)
+bayestestR::area_under_curve(x = branch2.subset.auc$Y_pt, branch2.subset.auc$A_pt)
+
+```
+
+### Saving -- full DTW timeplot -- with good dimensions
+```{r}
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+pdf(file = paste(dir1, 'DTW_full_time_plot.pdf', sep = "") ,width = 2.2, height = 1.5)
+text.size = 6
+
+ggplot() +
+      geom_line(data = dtw.obj.combined, aes(x = time, y = difference, color = as.factor(subsample)), size = .7, alpha = 0.3)  + 
+        scale_color_manual(values = rep('gray', 30))+
+          geom_vline(size = 1,xintercept = mean.df.time.plot.full$time[which(mean.df.time.plot.full$Y_pt > 50 & mean.df.time.plot.full$Y_pt < 51)][1], color = 'chartreuse3') + 
+          geom_vline(size = 1, xintercept = mean.df.time.plot.full$time[which(mean.df.time.plot.full$Y_pt > 63 & mean.df.time.plot.full$Y_pt < 64)][1], color = 'chartreuse3') + 
+       geom_line(data = mean.df.time.plot.full, aes(x = time, y = difference), color = "black", size = 1)  + 
+       theme_classic() +           
+       geom_hline(yintercept = 0, linetype = 'dashed', color = 'red') + 
+
+       theme(legend.position='none') +   
+      theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_blank()) + 
+    theme(plot.margin = margin(t = 3, r = 9, b = 0, l = 0)) +
+    theme(axis.line = element_blank(),
+        panel.border = element_rect(colour = "black", fill=NA, size=1)) +
+  
+    theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_blank()) + 
+    theme(plot.margin = margin(t = 0, r = 9, b = 0, l = 0)) +
+    theme(plot.title=element_blank())
+
+dev.off()
+  
+```
+
+#### Full branches DTW plot
+```{r}
+for (i in 1:30)
+{
+  dtw.obj <- read.delim(file  = paste(dir, list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/DTW_bootstrapping/")[i], '/', 
+                                      list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/DTW_bootstrapping/")[i], '_DTW.out', sep = ""), skip = 2)
+
+  dtw.obj <- dtw.obj[-1,]
+
+  title = 'more subsamples'
+  dtw.obj <- cbind(dtw.obj, data.frame(time = seq(1:nrow(dtw.obj)),
+                                difference = dtw.obj$Y_pt - dtw.obj$A_pt))
+  
+
+  dtw.obj <- cbind(dtw.obj, 
+        Y_pt.norm = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt )),
+        A_pt.norm = c(dtw.obj$A_pt / max(dtw.obj$A_pt )), 
+        norm.dff = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt ) - c(dtw.obj$A_pt / max(dtw.obj$A_pt ))),
+        subsample = i)
+  
+
+  dtw.obj.combined <- rbind(dtw.obj.combined, dtw.obj)
+}
+
+mean.obj.young <- c()
+mean.obj.aged <- c()
+for (i in 1:5776)
+  {
+    mean.obj.young <- c(mean.obj.young, mean(dtw.obj.combined$Y_pt[which(dtw.obj.combined$time == as.numeric(i))]))
+        mean.obj.aged <- c(mean.obj.aged, mean(dtw.obj.combined$A_pt[which(dtw.obj.combined$time == as.numeric(i))]))
+}
+
+  mean.df <- data.frame(Y_pt = mean.obj.young,
+                        A_pt = mean.obj.aged)
+  
+  mean.df.time.plot.full <- cbind(mean.df, 
+                             time = seq(1:nrow(mean.df)),
+                             difference = mean.df$Y_pt - mean.df$A_pt)
+
+
+```
+
+##### good dimensions
+```{r}
+  dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+pdf(file = paste(dir1, 'DTW_both_branches_plot.pdf', sep = "") ,width = 2.2, height = 1.5)
+text.size = 6
+
+ggplot() +
+                       geom_rect(aes(xmin = 5, xmax = 35, ymin = 5, ymax = 35), alpha = 0.5, fill = 'gray', color = 'black', stroke = .4) +
+               geom_rect(aes(xmin = 70, xmax = 118, ymin = 69, ymax = 118), alpha = 0.5, fill = 'gray', color = 'black', stroke = .4) +
+               geom_vline(xintercept = dtw.obj$Y_pt[which(dtw.obj$Y_pt > 50 & dtw.obj$Y_pt < 53)][1], color = 'chartreuse3', size = 1) + 
+          geom_vline(xintercept = dtw.obj$Y_pt[which(dtw.obj$Y_pt > 60 & dtw.obj$Y_pt < 63)][1], color = 'chartreuse3', size = 1) +
+      geom_line(data = dtw.obj.combined, aes(x = Y_pt, y = A_pt, color = as.factor(subsample)), size = .7, alpha = 0.3)  + 
+        scale_color_manual(values = rep('gray', 30))+
+      geom_line(data = mean.df, aes(x = Y_pt, y = A_pt), color = "black", size = 1)  + 
+                       geom_abline(intercept = 0, slope = 1, color = 'red', size = .5, linetype = 'dashed') +
+#      geom_line(size = 1)  +
+      theme_classic() +
+      theme(legend.position='none') +   
+      theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_blank()) + 
+    theme(plot.margin = margin(t = 3, r = 9, b = 0, l = 0)) +
+    theme(axis.line = element_blank(),
+        panel.border = element_rect(colour = "black", fill=NA, size=1)) +
+    theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_blank()) + 
+    theme(plot.margin = margin(t = 3, r = 9, b = 0, l = 0)) +
+    theme(plot.title=element_blank())
+
+dev.off()
+      
+```
+
+### Branch1 subset --- good dimensions
+```{r}
+title = 'Branch1_subset'
+dir <- "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/DTW_bootstrapping/"
+#setwd(dir)
+
+dtw.obj.combined <- data.frame()
+
+for (i in 1:30)
+#for (i in 1:2)
+{
+  
+  #new.dir <- paste(list.files(include.dirs = T, path = dir)[i], '/', list.files()[i], '_DTW.out', sep = "")
+  
+  dtw.obj <- read.delim(file  = paste(dir, list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/DTW_bootstrapping/")[i], '/', 
+                                      list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/DTW_bootstrapping/")[i], '_DTW.out', sep = ""), skip = 2)
+
+  dtw.obj <- dtw.obj[-1,]
+
+  title = title
+  dtw.obj <- cbind(dtw.obj, data.frame(time = seq(1:nrow(dtw.obj)),
+                                difference = dtw.obj$Y_pt - dtw.obj$A_pt))
+  
+  # print(ggplot(dtw.obj) + geom_line(aes(x = time, y = difference), size = 1)  + theme_classic()  + geom_hline(yintercept = 0))
+  
+
+  dtw.obj <- cbind(dtw.obj, 
+        Y_pt.norm = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt )),
+        A_pt.norm = c(dtw.obj$A_pt / max(dtw.obj$A_pt )), 
+        norm.dff = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt ) - c(dtw.obj$A_pt / max(dtw.obj$A_pt ))),
+        subsample = i)
+  
+  ### biggest.diff
+   dtw.obj <- dtw.obj[which(dtw.obj$Y_pt < 55),]
+  
+  dtw.obj.combined <- rbind(dtw.obj.combined, dtw.obj)
+}
+
+  mean.obj.young <- c()
+  mean.obj.aged <- c()
+  for (i in 1:max(dtw.obj.combined$time)){
+    mean.obj.young <- c(mean.obj.young, mean(dtw.obj.combined$Y_pt[which(dtw.obj.combined$time == as.numeric(i))]))
+        mean.obj.aged <- c(mean.obj.aged, mean(dtw.obj.combined$A_pt[which(dtw.obj.combined$time == as.numeric(i))]))
+  }
+  mean.df <- data.frame(Y_pt = mean.obj.young,
+                        A_pt = mean.obj.aged)
+  
+  # mean.df.time.plot <- cbind(mean.df, 
+  #                            time = seq(1:nrow(mean.df)),
+  #                            difference = mean.df$Y_pt - mean.df$A_pt)
+  # ggplot(mean.df.time.plot) + geom_line(aes(x = time, y = difference), size = 1)  + theme_classic()  + geom_hline(yintercept = 0)
+
+dtw.obj.combined.branch1 <- dtw.obj.combined
+```
+
+### saving good dimensions
+```{r}
+  dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+pdf(file = paste(dir1, 'DTW_branch1_subset_plot.pdf', sep = "") ,width = 2.2, height = 1.5)
+text.size = 6
+
+       ggplot() +
+        geom_rect(aes(xmin = 5, xmax = 35, ymin = 5, ymax = 35), alpha = 0.5, fill = 'gray', color = 'black', size = .3) +
+
+      geom_line(data = dtw.obj.combined.branch1, aes(x = Y_pt, y = A_pt, color = as.factor(subsample)), size = .7, alpha = .2)  + 
+        scale_color_manual(values = rep('gray', 30))+
+      geom_line(data = mean.df, aes(x = Y_pt, y = A_pt), color = rgb(red = 254, green = 226, blue = 74, maxColorValue = 254), size = 1.5)  + 
+               geom_abline(intercept = 0, slope = 1, color = 'red', size = .5, linetype = 'dashed') +
+
+      theme_classic() +
+      theme(legend.position='none') +   
+  
+    theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_blank()) + 
+    theme(plot.margin = margin(t = 3, r = 9, b = 0, l = 0)) +
+    theme(axis.line = element_blank(),
+        panel.border = element_rect(colour = "black", fill=NA, size=1))     +
+    theme(plot.title=element_blank())
+
+dev.off()
+       
+       
+# alpha = 0.5, fill = 'gray', color = 'black', stroke = .4) +
+```
+
+### Branch2 subset
+```{r}
+title = 'Branch2_n=30'
+dir <- "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/DTW_bootstrapping/"
+
+dtw.obj.combined <- data.frame()
+
+for (i in 1:30)
+{
+  dtw.obj <- read.delim(file  = paste(dir, list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/DTW_bootstrapping/")[i], '/', 
+                                      list.files(include.dirs = T, path = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/DTW/DTW_bootstrapping/")[i], '_DTW.out', sep = ""), skip = 2)
+
+  dtw.obj <- dtw.obj[-1,]
+
+  title = title
+  dtw.obj <- cbind(dtw.obj, data.frame(time = seq(1:nrow(dtw.obj)),
+                                difference = dtw.obj$Y_pt - dtw.obj$A_pt))
+  
+  dtw.obj <- cbind(dtw.obj, 
+        Y_pt.norm = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt )),
+        A_pt.norm = c(dtw.obj$A_pt / max(dtw.obj$A_pt )), 
+        norm.dff = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt ) - c(dtw.obj$A_pt / max(dtw.obj$A_pt ))),
+        subsample = i)
+  
+  ### biggest.diff
+   dtw.obj <- dtw.obj[which(dtw.obj$Y_pt >55),]
+  
+  dtw.obj.combined <- rbind(dtw.obj.combined, dtw.obj)
+}
+
+dtw.obj.combined.branch2 <- dtw.obj.combined
+  mean.obj.young <- c()
+  mean.obj.aged <- c()
+  for (i in 1:max(dtw.obj.combined.branch2$time)){
+    mean.obj.young <- c(mean.obj.young, mean(dtw.obj.combined.branch2$Y_pt[which(dtw.obj.combined.branch2$time == as.numeric(i))]))
+        mean.obj.aged <- c(mean.obj.aged, mean(dtw.obj.combined.branch2$A_pt[which(dtw.obj.combined.branch2$time == as.numeric(i))]))
+  }
+  mean.df <- data.frame(Y_pt = mean.obj.young,
+                        A_pt = mean.obj.aged)
+
+```
+
+
+#### good dimensions saving
+```{r}
+  dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/figure_drafts/plots_v1/'
+pdf(file = paste(dir1, 'DTW_branch2_subset_plot.pdf', sep = "") ,width = 2.2, height = 1.5)
+text.size = 6
+
+       ggplot() +
+        geom_rect(aes(xmin = 70, xmax = 118, ymin = 69, ymax = 118), alpha = 0.5, fill = 'gray', color = 'black', size = .3) +
+
+      geom_line(data = dtw.obj.combined.branch2, aes(x = Y_pt, y = A_pt, color = as.factor(subsample)), size = .7, alpha = 0.2)  + 
+        scale_color_manual(values = rep('gray', 30))+
+      geom_line(data = mean.df, aes(x = Y_pt, y = A_pt), color = rgb(red = 157, green = 43, blue = 83, maxColorValue = 187), size = 1.5)  + 
+               geom_abline(intercept = 0, slope = 1, color = 'red', size = .5, linetype = 'dashed') +
+         
+         
+      #          #geom_line(data = mean.df, aes(x = Y_pt, y = A_pt), color = rgb(red = 169, green = 30, blue = 64, maxColorValue = 169), size = 1.5)  + 
+      #    geom_line(size = 2)  +
+      # theme_classic() +
+      #   geom_rect(aes(xmin = 70, xmax = 118, ymin = 69, ymax = 118), alpha = 0.2, color = 'gray') +
+         
+         
+         
+         
+
+      theme_classic() +
+      theme(legend.position='none') +   
+             theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_blank()) + 
+    theme(plot.margin = margin(t = 3, r = 9, b = 0, l = 0)) +
+    theme(axis.line = element_blank(),
+        panel.border = element_rect(colour = "black", fill=NA, size=1)) +
+    theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_blank()) + 
+    theme(plot.margin = margin(t = 3, r = 9, b = 0, l = 0)) +
+    theme(plot.title=element_blank())
+
+dev.off()
+       
+```
+
+### ### ### ### ### ### ### ### ### 
+
+### Making ISOCHRONIC subsamples and saving them in new directories
+
+# YOUNG
+```{r}
+dir <- "/Users/jessekurland/Desktop/snRNAseq/PNAS_re_resubmission/DTW/inputs/DTW_bootstrappin_isochronic/"
+
+#dir.create(paste(dir, 'Branch1_Branch2_combined_trajectory_subsample1/', sep = ""))
+#val <- 1473
+val <- 1200
+for (bootstrap in 6:30)
+{
+    # ind1 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '0dpi' & cds.master@colData$condition.id == 'Aged' )]) , 1473) == T)
+    # ind2 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '4dpi' & cds.master@colData$condition.id == 'Aged' )]) , 1473) == T)
+    # ind3 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '7dpi' & cds.master@colData$condition.id == 'Aged' )]) , 1473) == T)
+    ind4 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '0dpi' & cds.master@colData$condition.id == 'Young' )]) , val) == T)
+    ind5 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '4dpi' & cds.master@colData$condition.id == 'Young' )]) , val) == T)
+    ind6 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '7dpi' & cds.master@colData$condition.id == 'Young' )]) , val) == T)
+    
+    #ind.combined <- c(ind1, ind2, ind3, ind4, ind5, ind6)
+    ind.combined <- c( ind4, ind5, ind6)
+    subsample.young1 <- cds.master[, ind.combined]
+    
+    
+    
+    ind4 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '0dpi' & cds.master@colData$condition.id == 'Young' )]) , val) == T)
+    ind5 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '4dpi' & cds.master@colData$condition.id == 'Young' )]) , val) == T)
+    ind6 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '7dpi' & cds.master@colData$condition.id == 'Young' )]) , val) == T)
+
+    ind.combined <- c( ind4, ind5, ind6)
+
+    
+    subsample.young2 <- cds.master[, ind.combined]
+  
+    
+    
+    new.dir <- paste('Branch1_Branch2_combined_trajectory_subsample_isochronic_young', bootstrap, '/', sep = "")
+    
+    dir.create(paste(dir, new.dir, sep = ""))
+
+        pseudotime.df.young1 <- data.frame(cells = rownames(colData(subsample.young1)),
+                                      pseudotime = pseudotime(subsample.young1))
+        pseudotime.df.young2 <- data.frame(cells = rownames(colData(subsample.young2)),
+                                          pseudotime = pseudotime(subsample.young2))
+        
+        write.csv(pseudotime.df.young1, file = paste(dir, new.dir, 'young1_subsample', '_pseudotime.csv', sep = ""))
+        write.csv(pseudotime.df.young2, file = paste(dir, new.dir, 'young2_subsample', '_pseudotime.csv', sep = ""))
+        
+        
+        # counts.mtx
+        counts.young1 <- counts(subsample.young1)
+        counts.young2 <- counts(subsample.young2)
+
+        writeMM(counts.young1,  file = paste(dir, new.dir, 'young1_subsample', '_counts.mtx', sep = ""))
+        writeMM(counts.young2, file = paste(dir, new.dir, 'young2_subsample', '_counts.mtx', sep = ""))
+        
+        # cellnames_list.txt
+        cell.names.young1 <- colnames(subsample.young1)
+        cell.names.young2 <- colnames(subsample.young2)
+ 
+        write.genelist.fun(cell.names.young1, filename = paste(dir, new.dir, 'young1_subsample', '_cellname_list.txt', sep = ""), paste = 0)
+        write.genelist.fun(cell.names.young2,  filename = paste(dir, new.dir, 'young2_subsample', '_cellname_list.txt', sep = ""), paste = 0)
+}
+```
+
+### 30x subsamples subsample of young v young
+```{r}
+dir <- "/Users/jessekurland/Desktop/snRNAseq/PNAS_re_resubmission/DTW/inputs/DTW_bootstrappin_isochronic/"
+
+dtw.obj.combined <- data.frame()
+for (i in 1:30)
+{
+  # rm(out.file.path)
+  # new.workdir <- paste(dir, list.files(include.dirs = T, path = "/Users/jessekurland/Desktop/snRNAseq/PNAS_re_resubmission/DTW/inputs/DTW_bootstrappin_isochronic/")[i], '/', sep = "")
+  
+  rm(out.file.path)
+  full.filelist <- paste(dir, list.files(include.dirs = T, path = "/Users/jessekurland/Desktop/snRNAseq/PNAS_re_resubmission/DTW/inputs/DTW_bootstrappin_isochronic/"), '/', sep = "")
+  aged.or.young.filelist <- full.filelist[grep("_young", full.filelist)]
+  
+  new.workdir <- aged.or.young.filelist[i]
+  
+  filenames <- list.files(path = new.workdir)
+  out.file <- filenames[grep(".out", filenames)]
+  out.file.path <- paste(new.workdir, out.file, sep = "")
+  
+ dtw.obj <- read.delim(file  = out.file.path, skip = 2)
+
+  dtw.obj <- dtw.obj[-1,]
+
+  title = 'more subsamples'
+  dtw.obj <- cbind(dtw.obj, data.frame(time = seq(1:nrow(dtw.obj)),
+                                difference = dtw.obj$Y_pt - dtw.obj$A_pt))
+  
+
+  dtw.obj <- cbind(dtw.obj, 
+        Y_pt.norm = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt )),
+        A_pt.norm = c(dtw.obj$A_pt / max(dtw.obj$A_pt )), 
+        norm.dff = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt ) - c(dtw.obj$A_pt / max(dtw.obj$A_pt ))),
+        subsample = i)
+  
+
+  dtw.obj.combined <- rbind(dtw.obj.combined, dtw.obj)
+}
+
+ggplot(dtw.obj.combined) + 
+  geom_line(aes(x = time, y = difference))
+
+mean.obj.young <- c()
+mean.obj.aged <- c()
+for (p in 1:4419)
+  {
+    mean.obj.young <- c(mean.obj.young, mean(dtw.obj.combined$Y_pt[which(dtw.obj.combined$time == as.numeric(p))]))
+    mean.obj.aged <- c(mean.obj.aged, mean(dtw.obj.combined$A_pt[which(dtw.obj.combined$time == as.numeric(p))]))
+}
+
+  mean.df <- data.frame(Y_pt = mean.obj.young,
+                        A_pt = mean.obj.aged)
+  
+  mean.df.time.plot.full <- cbind(mean.df, 
+                             time = seq(1:nrow(mean.df)),
+                             difference = mean.df$Y_pt - mean.df$A_pt)
+
+  
+print(ggplot() +
+                       geom_rect(aes(xmin = 5, xmax = 35, ymin = 5, ymax = 35), alpha = 0.5, fill = 'gray', color = 'black', stroke = .4) +
+               geom_rect(aes(xmin = 70, xmax = 118, ymin = 69, ymax = 118), alpha = 0.5, fill = 'gray', color = 'black', stroke = .4) +
+               geom_vline(xintercept = dtw.obj$Y_pt[which(dtw.obj$Y_pt > 50 & dtw.obj$Y_pt < 53)][1], color = 'chartreuse3', size = 1.5) + 
+          geom_vline(xintercept = dtw.obj$Y_pt[which(dtw.obj$Y_pt > 60 & dtw.obj$Y_pt < 63)][1], color = 'chartreuse3', size = 1.5) +
+      geom_line(data = dtw.obj.combined, aes(x = Y_pt, y = A_pt, color = as.factor(subsample)), size = 2, alpha = 0.3)  + 
+        scale_color_manual(values = rep('gray', 30))+
+      geom_line(data = mean.df, aes(x = Y_pt, y = A_pt), color = "black", size = 3)  + 
+                       geom_abline(intercept = 0, slope = 1, color = 'red', size = 1, linetype = 'dashed') +
+      geom_line(size = 2)  +
+      theme_classic() +
+
+      ggtitle(title) +
+      theme(plot.title = element_text(size = 20, face = "bold"))
+      )
+       
+       ### Time plot try 2
+print(ggplot() +
+      geom_line(data = dtw.obj.combined, aes(x = time, y = difference, color = as.factor(subsample)), size = 1, alpha = 0.3)  + 
+        scale_color_manual(values = rep('gray', 30))+
+       geom_line(data = mean.df.time.plot.full, aes(x = time, y = difference), color = "black", size = 1.5)  + 
+       theme_classic() +           
+       geom_hline(yintercept = 0, linetype = 'dashed', color = 'red') + 
+          geom_vline(size = 1,xintercept = mean.df.time.plot.full$time[which(mean.df.time.plot.full$Y_pt > 50 & mean.df.time.plot.full$Y_pt < 51)][1], color = 'chartreuse3') + 
+          geom_vline(size = 1, xintercept = mean.df.time.plot.full$time[which(mean.df.time.plot.full$Y_pt > 63 & mean.df.time.plot.full$Y_pt < 64)][1], color = 'chartreuse3') + ylim(c(-15, 15))
+  )
+```
+#### Young v young Fig S7 good dimensions saving
+```{r}
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_re_resubmission/R_plots/'
+pdf(file = paste(dir1, 'young_vs_young_30x_subsamples_timeplot.pdf', sep = "") ,width = 2.2, height = 1.5)
+text.size = 6
+
+ggplot() +
+      geom_line(data = dtw.obj.combined, aes(x = time, y = difference, color = as.factor(subsample)), size = .7, alpha = 0.3)  + 
+        scale_color_manual(values = rep('gray', 30))+
+          geom_vline(size = 1,xintercept = mean.df.time.plot.full$time[which(mean.df.time.plot.full$Y_pt > 50 & mean.df.time.plot.full$Y_pt < 51)][1], color = 'chartreuse3') + 
+          geom_vline(size = 1, xintercept = mean.df.time.plot.full$time[which(mean.df.time.plot.full$Y_pt > 63 & mean.df.time.plot.full$Y_pt < 64)][1], color = 'chartreuse3') + 
+       geom_line(data = mean.df.time.plot.full, aes(x = time, y = difference), color = "black", size = 1)  + 
+       theme_classic() +           
+       geom_hline(yintercept = 0, linetype = 'dashed', color = 'red') + 
+
+       theme(legend.position='none') +   
+      theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_blank()) + 
+    theme(plot.margin = margin(t = 3, r = 9, b = 0, l = 0)) +
+    theme(axis.line = element_blank(),
+        panel.border = element_rect(colour = "black", fill=NA, size=1)) +
+  
+    theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_blank()) + 
+    theme(plot.margin = margin(t = 0, r = 9, b = 0, l = 0)) +
+    theme(plot.title=element_blank())+ 
+  ylim(c(-15, 15))
+
+dev.off()
+```
+# AGED
+```{r}
+dir <- "/Users/jessekurland/Desktop/snRNAseq/PNAS_re_resubmission/DTW/inputs/DTW_bootstrappin_isochronic/"
+
+#dir.create(paste(dir, 'Branch1_Branch2_combined_trajectory_subsample1/', sep = ""))
+#val <- 1473
+val <- 1200
+#for (bootstrap in 6:30)
+for (bootstrap in 1:2)
+{
+    # ind1 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '0dpi' & cds.master@colData$condition.id == 'Aged' )]) , 1473) == T)
+    # ind2 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '4dpi' & cds.master@colData$condition.id == 'Aged' )]) , 1473) == T)
+    # ind3 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '7dpi' & cds.master@colData$condition.id == 'Aged' )]) , 1473) == T)
+    ind4 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '0dpi' & cds.master@colData$condition.id == 'Aged' )]) , val) == T)
+    ind5 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '4dpi' & cds.master@colData$condition.id == 'Aged' )]) , val) == T)
+    ind6 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '7dpi' & cds.master@colData$condition.id == 'Aged' )]) , val) == T)
+    
+    #ind.combined <- c(ind1, ind2, ind3, ind4, ind5, ind6)
+    ind.combined <- c( ind4, ind5, ind6)
+    subsample.aged1 <- cds.master[, ind.combined]
+    
+    
+    
+    ind4 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '0dpi' & cds.master@colData$condition.id == 'Aged' )]) , val) == T)
+    ind5 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '4dpi' & cds.master@colData$condition.id == 'Aged' )]) , val) == T)
+    ind6 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '7dpi' & cds.master@colData$condition.id == 'Aged' )]) , val) == T)
+
+    ind.combined <- c( ind4, ind5, ind6)
+
+    
+    subsample.aged2 <- cds.master[, ind.combined]
+  
+    
+    
+    new.dir <- paste('Branch1_Branch2_combined_trajectory_subsample_isochronic_aged', bootstrap, '/', sep = "")
+    
+    dir.create(paste(dir, new.dir, sep = ""))
+
+        pseudotime.df.aged1 <- data.frame(cells = rownames(colData(subsample.aged1)),
+                                      pseudotime = pseudotime(subsample.aged1))
+        pseudotime.df.aged2 <- data.frame(cells = rownames(colData(subsample.aged2)),
+                                          pseudotime = pseudotime(subsample.aged2))
+        
+        write.csv(pseudotime.df.aged1, file = paste(dir, new.dir, 'aged1_subsample', '_pseudotime.csv', sep = ""))
+        write.csv(pseudotime.df.aged2, file = paste(dir, new.dir, 'aged2_subsample', '_pseudotime.csv', sep = ""))
+        
+        
+        # counts.mtx
+        counts.aged1 <- counts(subsample.aged1)
+        counts.aged2 <- counts(subsample.aged2)
+
+        writeMM(counts.aged1,  file = paste(dir, new.dir, 'aged1_subsample', '_counts.mtx', sep = ""))
+        writeMM(counts.aged2, file = paste(dir, new.dir, 'aged2_subsample', '_counts.mtx', sep = ""))
+        
+        # cellnames_list.txt
+        cell.names.aged1 <- colnames(subsample.aged1)
+        cell.names.aged2 <- colnames(subsample.aged2)
+ 
+        write.genelist.fun(cell.names.aged1, filename = paste(dir, new.dir, 'aged1_subsample', '_cellname_list.txt', sep = ""), paste = 0)
+        write.genelist.fun(cell.names.aged2,  filename = paste(dir, new.dir, 'aged2_subsample', '_cellname_list.txt', sep = ""), paste = 0)
+}
+```
+
+### 30x subsamples of AGED v aged
+```{r}
+dir <- "/Users/jessekurland/Desktop/snRNAseq/PNAS_re_resubmission/DTW/inputs/DTW_bootstrappin_isochronic/"
+
+dtw.obj.combined <- data.frame()
+for (i in 1:30) ## HAVE TO REMAKE 1:2 -- done 12/13
+{
+  #rm(out.file.path)
+  full.filelist <- paste(dir, list.files(include.dirs = T, path = "/Users/jessekurland/Desktop/snRNAseq/PNAS_re_resubmission/DTW/inputs/DTW_bootstrappin_isochronic/"), '/', sep = "")
+  full.filelist2 <- full.filelist[-c(1:3)]
+  aged.or.young.filelist <- full.filelist2[grep("aged", full.filelist2)]
+  aged.or.young.filelist <- aged.or.young.filelist[-c(31:32)]
+  
+  new.workdir <- aged.or.young.filelist[i]
+  
+  filenames <- list.files(path = new.workdir)
+  out.file <- filenames[grep(".out", filenames)]
+  # out.file.tmp1 <- filenames[grep(".out", filenames)]
+  # out.file <- filenames[grep("Branch1_Branch2_combined_trajectory_subsample_DTW_isochronic_aged.out", out.file)]
+  out.file.path <- paste(new.workdir, out.file, sep = "")
+  
+ dtw.obj <- read.delim(file  = out.file.path, skip = 2)
+
+  dtw.obj <- dtw.obj[-1,]
+
+  title = 'more subsamples'
+  dtw.obj <- cbind(dtw.obj, data.frame(time = seq(1:nrow(dtw.obj)),
+                                difference = dtw.obj$Y_pt - dtw.obj$A_pt))
+  
+
+  dtw.obj <- cbind(dtw.obj, 
+        Y_pt.norm = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt )),
+        A_pt.norm = c(dtw.obj$A_pt / max(dtw.obj$A_pt )), 
+        norm.dff = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt ) - c(dtw.obj$A_pt / max(dtw.obj$A_pt ))),
+        subsample = i)
+  
+
+  dtw.obj.combined <- rbind(dtw.obj.combined, dtw.obj)
+}
+
+ggplot(dtw.obj.combined) + 
+  geom_line(aes(x = time, y = difference))
+
+mean.obj.young <- c()
+mean.obj.aged <- c()
+for (p in 1:4419)
+  {
+    mean.obj.young <- c(mean.obj.young, mean(dtw.obj.combined$Y_pt[which(dtw.obj.combined$time == as.numeric(p))]))
+    mean.obj.aged <- c(mean.obj.aged, mean(dtw.obj.combined$A_pt[which(dtw.obj.combined$time == as.numeric(p))]))
+}
+
+  mean.df <- data.frame(Y_pt = mean.obj.young,
+                        A_pt = mean.obj.aged)
+  
+  mean.df.time.plot.full <- cbind(mean.df, 
+                             time = seq(1:nrow(mean.df)),
+                             difference = mean.df$Y_pt - mean.df$A_pt)
+
+  
+print(ggplot() +
+                       geom_rect(aes(xmin = 5, xmax = 35, ymin = 5, ymax = 35), alpha = 0.5, fill = 'gray', color = 'black', stroke = .4) +
+               geom_rect(aes(xmin = 70, xmax = 118, ymin = 69, ymax = 118), alpha = 0.5, fill = 'gray', color = 'black', stroke = .4) +
+               geom_vline(xintercept = dtw.obj$Y_pt[which(dtw.obj$Y_pt > 50 & dtw.obj$Y_pt < 53)][1], color = 'chartreuse3', size = 1.5) + 
+          geom_vline(xintercept = dtw.obj$Y_pt[which(dtw.obj$Y_pt > 60 & dtw.obj$Y_pt < 63)][1], color = 'chartreuse3', size = 1.5) +
+      geom_line(data = dtw.obj.combined, aes(x = Y_pt, y = A_pt, color = as.factor(subsample)), size = 2, alpha = 0.3)  + 
+        scale_color_manual(values = rep('gray', 30))+
+      geom_line(data = mean.df, aes(x = Y_pt, y = A_pt), color = "black", size = 3)  + 
+                       geom_abline(intercept = 0, slope = 1, color = 'red', size = 1, linetype = 'dashed') +
+      geom_line(size = 2)  +
+      theme_classic() +
+
+      ggtitle(title) +
+      theme(plot.title = element_text(size = 20, face = "bold"))
+      )
+       
+       ### Time plot try 2
+print(ggplot() +
+      geom_line(data = dtw.obj.combined, aes(x = time, y = difference, color = as.factor(subsample)), size = 1, alpha = 0.3)  + 
+        scale_color_manual(values = rep('gray', 30))+
+       geom_line(data = mean.df.time.plot.full, aes(x = time, y = difference), color = "black", size = 1.5)  + 
+       theme_classic() +           
+       geom_hline(yintercept = 0, linetype = 'dashed', color = 'red') + 
+          geom_vline(size = 1,xintercept = mean.df.time.plot.full$time[which(mean.df.time.plot.full$Y_pt > 50 & mean.df.time.plot.full$Y_pt < 51)][1], color = 'chartreuse3') + 
+          geom_vline(size = 1, xintercept = mean.df.time.plot.full$time[which(mean.df.time.plot.full$Y_pt > 63 & mean.df.time.plot.full$Y_pt < 64)][1], color = 'chartreuse3') + ylim(c(-15, 15))
+  )
+```
+
+#### Aged v aged Fig S7 good dimensions saving
+```{r}
+dir1 <- '/Users/jessekurland/Desktop/snRNAseq/PNAS_re_resubmission/R_plots/'
+pdf(file = paste(dir1, 'aged_vs_aged_30x_subsamples_timeplot.pdf', sep = "") ,width = 2.2, height = 1.5)
+text.size = 6
+
+ggplot() +
+      geom_line(data = dtw.obj.combined, aes(x = time, y = difference, color = as.factor(subsample)), size = .7, alpha = 0.3)  + 
+        scale_color_manual(values = rep('gray', 30))+
+          geom_vline(size = 1,xintercept = mean.df.time.plot.full$time[which(mean.df.time.plot.full$Y_pt > 50 & mean.df.time.plot.full$Y_pt < 51)][1], color = 'chartreuse3') + 
+          geom_vline(size = 1, xintercept = mean.df.time.plot.full$time[which(mean.df.time.plot.full$Y_pt > 63 & mean.df.time.plot.full$Y_pt < 64)][1], color = 'chartreuse3') + 
+       geom_line(data = mean.df.time.plot.full, aes(x = time, y = difference), color = "black", size = 1)  + 
+       theme_classic() +           
+       geom_hline(yintercept = 0, linetype = 'dashed', color = 'red') + 
+
+       theme(legend.position='none') +   
+      theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_blank()) + 
+    theme(plot.margin = margin(t = 3, r = 9, b = 0, l = 0)) +
+    theme(axis.line = element_blank(),
+        panel.border = element_rect(colour = "black", fill=NA, size=1)) +
+  
+    theme(axis.title.x = element_blank()) +
+    theme(axis.title.y = element_blank()) + 
+    theme(plot.margin = margin(t = 0, r = 9, b = 0, l = 0)) +
+    theme(plot.title=element_blank())+ 
+  ylim(c(-15, 15))
+
+dev.off()
+```
+
+
+### Mixed subsampling 
+```{r}
+dir <- "/Users/jessekurland/Desktop/snRNAseq/PNAS_re_resubmission/DTW/inputs/DTW_bootstrappin_isochronic/"
+
+#dir.create(paste(dir, 'Branch1_Branch2_combined_trajectory_subsample1/', sep = ""))
+#val <- 1473
+val <- 1200
+for (bootstrap in 6:10)
+{
+    ind4 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '0dpi')]) , val) == T)
+    ind5 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '4dpi')]) , val) == T)
+    ind6 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '7dpi')]) , val) == T)
+    
+    #ind.combined <- c(ind1, ind2, ind3, ind4, ind5, ind6)
+    ind.combined <- c( ind4, ind5, ind6)
+    subsample.mixed1 <- cds.master[, ind.combined]
+    
+    
+    
+    ind4 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '0dpi')]) , val) == T)
+    ind5 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '4dpi')]) , val) == T)
+    ind6 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '7dpi')]) , val) == T)
+
+    ind.combined <- c( ind4, ind5, ind6)
+
+    
+    subsample.mixed2 <- cds.master[, ind.combined]
+  
+    
+    
+    new.dir <- paste('Branch1_Branch2_combined_trajectory_subsample_isochronic_mixed', bootstrap, '/', sep = "")
+    
+    dir.create(paste(dir, new.dir, sep = ""))
+
+        pseudotime.df.mixed1 <- data.frame(cells = rownames(colData(subsample.mixed1)),
+                                      pseudotime = pseudotime(subsample.mixed1))
+        pseudotime.df.mixed2 <- data.frame(cells = rownames(colData(subsample.mixed2)),
+                                          pseudotime = pseudotime(subsample.mixed2))
+        
+        write.csv(pseudotime.df.mixed1, file = paste(dir, new.dir, 'mixed1_subsample', '_pseudotime.csv', sep = ""))
+        write.csv(pseudotime.df.mixed2, file = paste(dir, new.dir, 'mixed2_subsample', '_pseudotime.csv', sep = ""))
+        
+        
+        # counts.mtx
+        counts.mixed1 <- counts(subsample.mixed1)
+        counts.mixed2 <- counts(subsample.mixed2)
+
+        writeMM(counts.mixed1,  file = paste(dir, new.dir, 'mixed1_subsample', '_counts.mtx', sep = ""))
+        writeMM(counts.mixed2, file = paste(dir, new.dir, 'mixed2_subsample', '_counts.mtx', sep = ""))
+        
+        # cellnames_list.txt
+        cell.names.mixed1 <- colnames(subsample.mixed1)
+        cell.names.mixed2 <- colnames(subsample.mixed2)
+ 
+        write.genelist.fun(cell.names.mixed1, filename = paste(dir, new.dir, 'mixed1_subsample', '_cellname_list.txt', sep = ""), paste = 0)
+        write.genelist.fun(cell.names.mixed2,  filename = paste(dir, new.dir, 'mixed2_subsample', '_cellname_list.txt', sep = ""), paste = 0)
+        
+        print(bootstrap)
+}
+```
+
+### MIXED
+```{r}
+dir <- "/Users/jessekurland/Desktop/snRNAseq/PNAS_re_resubmission/DTW/inputs/DTW_bootstrappin_isochronic/"
+
+dtw.obj.combined <- data.frame()
+for (i in 1:5)
+{
+  rm(out.file.path)
+  full.filelist <- paste(dir, list.files(include.dirs = T, path = "/Users/jessekurland/Desktop/snRNAseq/PNAS_re_resubmission/DTW/inputs/DTW_bootstrappin_isochronic/"), '/', sep = "")
+  aged.or.young.filelist <- full.filelist[grep("_mixed", full.filelist)]
+  
+  new.workdir <- aged.or.young.filelist[i]
+  
+  filenames <- list.files(path = new.workdir)
+  out.file <- filenames[grep(".out", filenames)]
+  out.file.path <- paste(new.workdir, out.file, sep = "")
+  
+ dtw.obj <- read.delim(file  = out.file.path, skip = 2)
+
+  dtw.obj <- dtw.obj[-1,]
+
+  title = 'Mixed'
+  dtw.obj <- cbind(dtw.obj, data.frame(time = seq(1:nrow(dtw.obj)),
+                                difference = dtw.obj$Y_pt - dtw.obj$A_pt))
+  
+
+  dtw.obj <- cbind(dtw.obj, 
+        Y_pt.norm = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt )),
+        A_pt.norm = c(dtw.obj$A_pt / max(dtw.obj$A_pt )), 
+        norm.dff = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt ) - c(dtw.obj$A_pt / max(dtw.obj$A_pt ))),
+        subsample = i)
+  
+
+  dtw.obj.combined <- rbind(dtw.obj.combined, dtw.obj)
+}
+
+ggplot(dtw.obj.combined) + 
+  geom_line(aes(x = time, y = difference))
+
+mean.obj.young <- c()
+mean.obj.aged <- c()
+for (p in 1:4419)
+  {
+    mean.obj.young <- c(mean.obj.young, mean(dtw.obj.combined$Y_pt[which(dtw.obj.combined$time == as.numeric(p))]))
+    mean.obj.aged <- c(mean.obj.aged, mean(dtw.obj.combined$A_pt[which(dtw.obj.combined$time == as.numeric(p))]))
+}
+
+  mean.df <- data.frame(Y_pt = mean.obj.young,
+                        A_pt = mean.obj.aged)
+  
+  mean.df.time.plot.full <- cbind(mean.df, 
+                             time = seq(1:nrow(mean.df)),
+                             difference = mean.df$Y_pt - mean.df$A_pt)
+
+  
+print(ggplot() +
+                       geom_rect(aes(xmin = 5, xmax = 35, ymin = 5, ymax = 35), alpha = 0.5, fill = 'gray', color = 'black', stroke = .4) +
+               geom_rect(aes(xmin = 70, xmax = 118, ymin = 69, ymax = 118), alpha = 0.5, fill = 'gray', color = 'black', stroke = .4) +
+               geom_vline(xintercept = dtw.obj$Y_pt[which(dtw.obj$Y_pt > 50 & dtw.obj$Y_pt < 53)][1], color = 'chartreuse3', size = 1.5) + 
+          geom_vline(xintercept = dtw.obj$Y_pt[which(dtw.obj$Y_pt > 60 & dtw.obj$Y_pt < 63)][1], color = 'chartreuse3', size = 1.5) +
+      geom_line(data = dtw.obj.combined, aes(x = Y_pt, y = A_pt, color = as.factor(subsample)), size = 2, alpha = 0.3)  + 
+        scale_color_manual(values = rep('gray', 30))+
+      geom_line(data = mean.df, aes(x = Y_pt, y = A_pt), color = "black", size = 3)  + 
+                       geom_abline(intercept = 0, slope = 1, color = 'red', size = 1, linetype = 'dashed') +
+      geom_line(size = 2)  +
+      theme_classic() +
+
+      ggtitle(title) +
+      theme(plot.title = element_text(size = 20, face = "bold"))
+      )
+       
+       ### Time plot try 2
+print(ggplot() +
+      geom_line(data = dtw.obj.combined, aes(x = time, y = difference, color = as.factor(subsample)), size = 1, alpha = 0.3)  + 
+        scale_color_manual(values = rep('gray', 30))+
+       geom_line(data = mean.df.time.plot.full, aes(x = time, y = difference), color = "black", size = 1.5)  + 
+       theme_classic() +           
+       geom_hline(yintercept = 0, linetype = 'dashed', color = 'red') + 
+          geom_vline(size = 1,xintercept = mean.df.time.plot.full$time[which(mean.df.time.plot.full$Y_pt > 50 & mean.df.time.plot.full$Y_pt < 51)][1], color = 'chartreuse3') + 
+          geom_vline(size = 1, xintercept = mean.df.time.plot.full$time[which(mean.df.time.plot.full$Y_pt > 63 & mean.df.time.plot.full$Y_pt < 64)][1], color = 'chartreuse3') + ylim(c(-15, 15))
+  )
+```
+
+
+### Aged -- SUBSAMPLING WITHOUT REPLACEMENT
+```{r}
+dir <- "/Users/jessekurland/Desktop/snRNAseq/PNAS_re_resubmission/DTW/inputs/DTW_bootstrappin_isochronic/"
+
+#dir.create(paste(dir, 'Branch1_Branch2_combined_trajectory_subsample1/', sep = ""))
+#val <- 1473
+val <- 1000
+for (bootstrap in 1:3)
+{
+    # ind1 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '0dpi' & cds.master@colData$condition.id == 'Aged' )]) , 1473) == T)
+    # ind2 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '4dpi' & cds.master@colData$condition.id == 'Aged' )]) , 1473) == T)
+    # ind3 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '7dpi' & cds.master@colData$condition.id == 'Aged' )]) , 1473) == T)
+    ind4 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '0dpi' & cds.master@colData$condition.id == 'Aged' )]) , val, replace = F) == T)
+    ind5 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '4dpi' & cds.master@colData$condition.id == 'Aged' )]) , val, replace = F) == T)
+    ind6 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '7dpi' & cds.master@colData$condition.id == 'Aged' )]) , val, replace = F) == T)
+    
+    #ind.combined <- c(ind1, ind2, ind3, ind4, ind5, ind6)
+    ind.combined <- c( ind4, ind5, ind6)
+    subsample.aged1 <- cds.master[, ind.combined]
+    
+    
+    
+    ind4 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '0dpi' & cds.master@colData$condition.id == 'Aged' )]) , val) == T)
+    ind5 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '4dpi' & cds.master@colData$condition.id == 'Aged' )]) , val) == T)
+    ind6 <- which(colnames(cds.master) %in% sample(colnames(cds.master[,which(cds.master@colData$injury.dpi == '7dpi' & cds.master@colData$condition.id == 'Aged' )]) , val) == T)
+
+    ind.combined <- c( ind4, ind5, ind6)
+
+    
+    subsample.aged2 <- cds.master[, ind.combined]
+  
+    
+    
+    new.dir <- paste('Branch1_Branch2_combined_trajectory_subsample_isochronic_aged_without_rep', bootstrap, '/', sep = "")
+    
+    dir.create(paste(dir, new.dir, sep = ""))
+
+        pseudotime.df.aged1 <- data.frame(cells = rownames(colData(subsample.aged1)),
+                                      pseudotime = pseudotime(subsample.aged1))
+        pseudotime.df.aged2 <- data.frame(cells = rownames(colData(subsample.aged2)),
+                                          pseudotime = pseudotime(subsample.aged2))
+        
+        write.csv(pseudotime.df.aged1, file = paste(dir, new.dir, 'aged1_subsample_without_rep', '_pseudotime.csv', sep = ""))
+        write.csv(pseudotime.df.aged2, file = paste(dir, new.dir, 'aged2_subsample_without_rep', '_pseudotime.csv', sep = ""))
+        
+        
+        # counts.mtx
+        counts.aged1 <- counts(subsample.aged1)
+        counts.aged2 <- counts(subsample.aged2)
+
+        writeMM(counts.aged1,  file = paste(dir, new.dir, 'aged1_subsample_without_rep', '_counts.mtx', sep = ""))
+        writeMM(counts.aged2, file = paste(dir, new.dir, 'aged2_subsample_without_rep', '_counts.mtx', sep = ""))
+        
+        # cellnames_list.txt
+        cell.names.aged1 <- colnames(subsample.aged1)
+        cell.names.aged2 <- colnames(subsample.aged2)
+ 
+        write.genelist.fun(cell.names.aged1, filename = paste(dir, new.dir, 'aged1_subsample_without_rep', '_cellname_list.txt', sep = ""), paste = 0)
+        write.genelist.fun(cell.names.aged2,  filename = paste(dir, new.dir, 'aged2_subsample_without_rep', '_cellname_list.txt', sep = ""), paste = 0)
+        print(bootstrap)
+}
+```
+
+### Aged -- SUBSAMPLING WITHOUT REPLACEMENT
+```{r}
+dir <- "/Users/jessekurland/Desktop/snRNAseq/PNAS_re_resubmission/DTW/inputs/DTW_bootstrappin_isochronic/"
+
+dtw.obj.combined <- data.frame()
+for (i in 1:3)
+{
+  rm(out.file.path)
+  full.filelist <- paste(dir, list.files(include.dirs = T, path = "/Users/jessekurland/Desktop/snRNAseq/PNAS_re_resubmission/DTW/inputs/DTW_bootstrappin_isochronic/"), '/', sep = "")
+  aged.or.young.filelist <- full.filelist[grep("aged_without_rep", full.filelist)]
+  
+  new.workdir <- aged.or.young.filelist[i]
+  
+  filenames <- list.files(path = new.workdir)
+  out.file <- filenames[grep("rep.out", filenames)]
+  out.file.path <- paste(new.workdir, out.file, sep = "")
+  
+ dtw.obj <- read.delim(file  = out.file.path, skip = 2)
+
+  dtw.obj <- dtw.obj[-1,]
+
+  title = 'more subsamples'
+  dtw.obj <- cbind(dtw.obj, data.frame(time = seq(1:nrow(dtw.obj)),
+                                difference = dtw.obj$Y_pt - dtw.obj$A_pt))
+  
+
+  dtw.obj <- cbind(dtw.obj, 
+        Y_pt.norm = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt )),
+        A_pt.norm = c(dtw.obj$A_pt / max(dtw.obj$A_pt )), 
+        norm.dff = c(dtw.obj$Y_pt / max(dtw.obj$Y_pt ) - c(dtw.obj$A_pt / max(dtw.obj$A_pt ))),
+        subsample = i)
+  
+
+  dtw.obj.combined <- rbind(dtw.obj.combined, dtw.obj)
+}
+
+ggplot(dtw.obj.combined) + 
+  geom_line(aes(x = time, y = difference))
+
+mean.obj.young <- c()
+mean.obj.aged <- c()
+for (p in 1:4419)
+  {
+    mean.obj.young <- c(mean.obj.young, mean(dtw.obj.combined$Y_pt[which(dtw.obj.combined$time == as.numeric(p))]))
+    mean.obj.aged <- c(mean.obj.aged, mean(dtw.obj.combined$A_pt[which(dtw.obj.combined$time == as.numeric(p))]))
+}
+
+  mean.df <- data.frame(Y_pt = mean.obj.young,
+                        A_pt = mean.obj.aged)
+  
+  mean.df.time.plot.full <- cbind(mean.df, 
+                             time = seq(1:nrow(mean.df)),
+                             difference = mean.df$Y_pt - mean.df$A_pt)
+
+  
+print(ggplot() +
+                       geom_rect(aes(xmin = 5, xmax = 35, ymin = 5, ymax = 35), alpha = 0.5, fill = 'gray', color = 'black', stroke = .4) +
+               geom_rect(aes(xmin = 70, xmax = 118, ymin = 69, ymax = 118), alpha = 0.5, fill = 'gray', color = 'black', stroke = .4) +
+               geom_vline(xintercept = dtw.obj$Y_pt[which(dtw.obj$Y_pt > 50 & dtw.obj$Y_pt < 53)][1], color = 'chartreuse3', size = 1.5) + 
+          geom_vline(xintercept = dtw.obj$Y_pt[which(dtw.obj$Y_pt > 60 & dtw.obj$Y_pt < 63)][1], color = 'chartreuse3', size = 1.5) +
+      geom_line(data = dtw.obj.combined, aes(x = Y_pt, y = A_pt, color = as.factor(subsample)), size = 2, alpha = 0.3)  + 
+        scale_color_manual(values = rep('gray', 30))+
+      geom_line(data = mean.df, aes(x = Y_pt, y = A_pt), color = "black", size = 3)  + 
+                       geom_abline(intercept = 0, slope = 1, color = 'red', size = 1, linetype = 'dashed') +
+      geom_line(size = 2)  +
+      theme_classic() +
+
+      ggtitle(title) +
+      theme(plot.title = element_text(size = 20, face = "bold"))
+      )
+       
+       ### Time plot try 2
+print(ggplot() +
+      geom_line(data = dtw.obj.combined, aes(x = time, y = difference, color = as.factor(subsample)), size = 1, alpha = 0.3)  + 
+        scale_color_manual(values = rep('gray', 30))+
+       geom_line(data = mean.df.time.plot.full, aes(x = time, y = difference), color = "black", size = 1.5)  + 
+       theme_classic() +           
+       geom_hline(yintercept = 0, linetype = 'dashed', color = 'red') + 
+          geom_vline(size = 1,xintercept = mean.df.time.plot.full$time[which(mean.df.time.plot.full$Y_pt > 50 & mean.df.time.plot.full$Y_pt < 51)][1], color = 'chartreuse3') + 
+          geom_vline(size = 1, xintercept = mean.df.time.plot.full$time[which(mean.df.time.plot.full$Y_pt > 63 & mean.df.time.plot.full$Y_pt < 64)][1], color = 'chartreuse3') + ylim(c(-15, 15))
+  )
+```
+

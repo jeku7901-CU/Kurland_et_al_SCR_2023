@@ -1,0 +1,232 @@
+### gene.plotting.function
+```{r}
+ # sce = sce.branch2.aged.young.FULL
+ # genelist = unique(glycolysis.not.diff)
+#genelist = unique(not.diff)
+#genelist <- unique(pathway.list$`electron transport chain`)
+#sce = sce.branch2.sub1.aged.young
+
+gene.plotting.function <- function(genelist, 
+                                     sce, 
+                                     normalize = 1, 
+                                     print.genelist.for = NULL, 
+                                     print.list = T, 
+                                     cols = mets.cols,
+                                     title = "",
+                                     NA.0.correction = T)
+{
+
+##plotting loop
+  
+    # remove genes that are not in the sce
+    if (any(genelist %in% rownames(sce) == FALSE) == TRUE)
+      {
+      genelist <- genelist[-which(genelist %nin% rownames(sce))]
+      }
+      
+      #if (grep('Bmp7', colnames(ymooth.spread.l1.time)) == 28) {genelist <- genelist[-28]}
+  
+      ysmooth <- predictSmooth(models = sce, gene = genelist, nPoints = 20)
+     
+    ymooth.spread <- spread(ysmooth, key = gene, value = yhat)
+    
+    ymooth.spread.l1.time <- ymooth.spread[1:20, 3:ncol(ymooth.spread)]
+    ymooth.spread.l2.time <- ymooth.spread[21:40, 3:ncol(ymooth.spread)]
+    
+    if (NA.0.correction == T){
+    ymooth.spread.l1.time <- ymooth.spread.l1.time[,-which(is.na(ymooth.spread.l1.time[5,]) | ymooth.spread.l1.time[5,] == 0  )]
+    ymooth.spread.l2.time <- ymooth.spread.l2.time[,-which(is.na(ymooth.spread.l2.time[5,]) | ymooth.spread.l2.time[5,] == 0  )]
+    }
+        
+    sderr.l1 <- rowSds(as.matrix(ymooth.spread.l1.time)) / sqrt(ncol(as.matrix(ymooth.spread.l1.time)))
+        
+    ymooth.spread.l1.mean <- data.frame(time = seq(1:20),
+                                        lineage = rep("Aged", 20), 
+                                        line.mean = rowMeans(ymooth.spread.l1.time),
+                                        
+                                        sderr = sderr.l1,
+                                        sd.high = rowMeans(ymooth.spread.l1.time) + sderr.l1,
+                                        sd.low = rowMeans(ymooth.spread.l1.time) - sderr.l1,
+                                        row.names = NULL)
+                            
+    
+    sderr.l2 <- rowSds(as.matrix(ymooth.spread.l2.time)) / sqrt(ncol(as.matrix(ymooth.spread.l2.time)))
+
+    ymooth.spread.l2.mean <- data.frame(time = seq(1:20),
+                                        lineage = rep("Young", 20), 
+                                        line.mean = rowMeans(ymooth.spread.l2.time),
+                                        
+                                        sderr = rowSds(as.matrix(ymooth.spread.l2.time)) / sderr.l2,
+                                        sd.high = rowMeans(ymooth.spread.l2.time) + sderr.l2,
+                                        sd.low = rowMeans(ymooth.spread.l2.time) - sderr.l2,
+                                        row.names = NULL)
+      
+    genes.l1.l2.means <-rbind(ymooth.spread.l1.mean, ymooth.spread.l2.mean)
+        
+        # gene plot
+               print(   
+                 ggplot() + 
+                 geom_line(data = genes.l1.l2.means, aes(x = time, y = line.mean, color = lineage), size = 2)  + 
+                 geom_ribbon(data = genes.l1.l2.means, aes(x = time, ymin = sd.low, ymax = sd.high, fill=lineage,), color = 'black',outline.type = "both", size = 0.1, alpha=0.2) + 
+                 scale_fill_manual(values = c(cols), 
+                                   breaks = c("Aged", "Young"))+
+                 scale_color_manual(values = c(cols),
+                                   breaks = c("Aged", "Young"))+
+                theme_classic() + ggtitle(title)
+         )
+
+}
+```
+
+
+
+### Reading in panther file
+```{r}
+result <- fromJSON(file = "~/Downloads/myonuclear_subset_GO_process.json")
+
+pathway.list <- list()
+for (category in 1:length(result$overrepresentation$group))
+{
+  for (sub.category in 1:length(result$overrepresentation$group[[category]]$result))
+  {
+    
+  if (is.numeric(result$overrepresentation$group[[category]]$result$number_in_reference) == TRUE) {
+    genelist <- result$overrepresentation$group[[category]]$result$input_list$mapped_id_list$mapped_id
+    name <- paste(result$overrepresentation$group[[category]]$result$term$label, result$overrepresentation$group[[category]]$result$input_list$fold_enrichment, sep = '_')
+    pathway.list[[name]] <- genelist
+  }
+    
+    else{
+    genelist <- result$overrepresentation$group[[category]]$result[[sub.category]]$input_list$mapped_id_list$mapped_id
+    name <- paste(result$overrepresentation$group[[category]]$result[[sub.category]]$term$label, as.numeric(result$overrepresentation$group[[category]]$result[[sub.category]]$input_list$fold_enrichment), sep = '_')
+    pathway.list[[name]] <- genelist
+    }
+  }
+}
+
+```
+
+```{r}
+gene.plotting.function(genelist = pathway.list$`cell differentiation_1.60916172827041`, 
+                       sce = sce.branch2.sub1.aged.young, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F)
+```
+
+
+#### branch1 and branch2 overlap and specific genes from patterntest
+
+### Reading in panther file -- modified for some reason...
+```{r}
+result <- fromJSON(file = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/json_files/branch1_branch2_patterntest_overlap.json")
+
+# result <- fromJSON(file = "~/Desktop/snRNAseq/PNAS_resubmission/sequencing/R_analysis/genelists_GO/panther_process_dtw_biggest_diff.json")
+
+
+pathway.list <- list()
+for (category in 1:length(result$overrepresentation$result))
+{
+  for (sub.category in 1:length(result$overrepresentation$result[[category]]))
+  {
+    
+  if (is.numeric(result$overrepresentation$result[[category]]$number_in_reference) == TRUE) {
+    genelist <- result$overrepresentation$result[[category]]$input_list$mapped_id_list$mapped_id
+    name <- paste(result$overrepresentation$result[[category]]$term$label, result$overrepresentation$group[[category]]$result$input_list$fold_enrichment, sep = '_')
+    pathway.list[[name]] <- genelist
+  }
+    
+    else{
+    genelist <- result$overrepresentation$result[[category]][[sub.category]]$mapped_id_list$mapped_id
+    name <- paste(result$overrepresentation$result[[category]][[sub.category]]$term$label, as.numeric(result$overrepresentation$group[[category]]$result[[sub.category]]$input_list$fold_enrichment), sep = '_')
+    pathway.list[[name]] <- genelist
+    }
+  }
+}
+
+```
+
+# plotting
+```{r}
+gene.plotting.function(pathway.list$`T-tubule organization_`,
+                       print.list = F, sce = sce.branch2.sub1.aged.young, NA.0.correction = F, 
+                       title = F)
+
+
+gene.plotting.function(genelist = pathway.list$`T-tubule organization_`,
+                       sce = sce.branch2.sub1.aged.young, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F)
+```
+
+### ARE THE NEW HEATMAP CLUSTERS ASSOCIATED WITH A DISTICNT SHAPE? 
+### branch1_archs4tf_TFs$   TWIST1 human tf ARCHS4 coexpression
+```{r}
+gene.plotting.function(genelist = branch1_archs4tf_TFs$`TWIST1 human tf ARCHS4 coexpression`,
+                       sce = sce.branch1.aged.young.FULL, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F)
+
+gene.plotting.function(genelist = branch1_archs4tf_TFs$`OSR1 human tf ARCHS4 coexpression`,
+                       sce = sce.branch1.aged.young.FULL, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F)
+
+gene.plotting.function(genelist = branch1_archs4tf_TFs$`NFATC4 human tf ARCHS4 coexpression`,
+                       sce = sce.branch1.aged.young.FULL, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F)
+
+gene.plotting.function(genelist = branch1_archs4tf_TFs$`TBX5 human tf ARCHS4 coexpression`,
+                       sce = sce.branch1.aged.young.FULL, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F)
+
+gene.plotting.function(genelist = branch1_archs4tf_TFs$`FBN1 human tf ARCHS4 coexpression`,
+                       sce = sce.branch1.aged.young.FULL, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F)
+
+gene.plotting.function(genelist = branch1_archs4tf_TFs$`SNAI2 human tf ARCHS4 coexpression`,
+                       sce = sce.branch1.aged.young.FULL, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F)
+
+gene.plotting.function(genelist = branch1_archs4tf_TFs$`TEAD4 human tf ARCHS4 coexpression`,
+                       sce = sce.branch1.aged.young.FULL, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F)
+
+gene.plotting.function(genelist = branch1_archs4tf_TFs$`MEF2C human tf ARCHS4 coexpression`,
+                       sce = sce.branch1.aged.young.FULL, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F)
+
+gene.plotting.function(genelist = branch1_archs4tf_TFs$`MYOG human tf ARCHS4 coexpression`,
+                       sce = sce.branch1.aged.young.FULL, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F)
+
+gene.plotting.function(genelist = branch1_archs4tf_TFs$`PITX2 human tf ARCHS4 coexpression`,
+                       sce = sce.branch1.aged.young.FULL, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F)
+
+gene.plotting.function(genelist = branch1_archs4tf_TFs$`CUL4A human tf ARCHS4 coexpression`,
+                       sce = sce.branch1.aged.young.FULL, 
+                       print.genelist.for = F, 
+                       cols = mets.cols,
+                       NA.0.correction = F)
+```
+

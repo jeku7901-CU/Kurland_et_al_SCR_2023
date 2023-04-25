@@ -1,0 +1,1110 @@
+---
+title: "SnRNAseq_seqrun2_seurat_v1"
+---
+
+###PAckages
+```{r}
+library(Seurat)
+library(SoupX)
+library(monocle)
+library(cowplot)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(gplots)
+library(limma)
+library(gridExtra)
+library(DoubletFinder)
+```
+
+### This is the original datasets
+```{r}
+workdir <- "/Users/jessekurland/Desktop/snRNAseq/cellranger_outputs/"
+
+
+A0.obj <- load10X(paste(workdir, "OU/outs/", sep = ""))
+count = autoEstCont(A0.obj)
+out = adjustCounts(count)
+A0.obj <- CreateSeuratObject(counts = out, project = "snRNAseq", min.cells = 3, min.features = 200)
+
+Y0.obj <- load10X(paste(workdir, "AU/outs/", sep = ""))
+count = autoEstCont(Y0.obj)
+out = adjustCounts(count)
+Y0.obj <- CreateSeuratObject(counts = out, project = "snRNAseq", min.cells = 3, min.features = 200)
+
+Y4_R1.obj <- load10X(paste(workdir, "A_day4PI/outs/", sep = ""))
+count = autoEstCont(Y4_R1.obj, tfidfMin = 0.5, forceAccept = T)
+out = adjustCounts(count)
+Y4_R1.obj <- CreateSeuratObject(counts = out, project = "snRNAseq", min.cells = 3, min.features = 200)
+
+Y7_R1.obj <- load10X(paste(workdir, "A_day7PI/outs/", sep = ""))
+count = autoEstCont(Y7_R1.obj, tfidfMin = 0.5, forceAccept = T)
+out = adjustCounts(count)
+Y7_R1.obj <- CreateSeuratObject(counts = out, project = "snRNAseq", min.cells = 3, min.features = 200)
+
+
+A4_R1.obj <- load10X(paste(workdir, "O_day4PI/outs/", sep = ""))
+count = autoEstCont(A4_R1.obj,tfidfMin = 0.5, forceAccept = T)
+out = adjustCounts(count)
+A4_R1.obj <- CreateSeuratObject(counts = out, project = "snRNAseq", min.cells = 3, min.features = 200)
+
+
+A7_R1.obj <- load10X(paste(workdir, "O_day7PI/outs/", sep = ""))
+count = autoEstCont(A7_R1.obj,tfidfMin = 0.5, forceAccept = T)
+out = adjustCounts(count)
+A7_R1.obj <- CreateSeuratObject(counts = out, project = "snRNAseq", min.cells = 3, min.features = 200)
+
+save(A0.obj, Y0.obj, Y4_R1.obj, Y7_R1.obj, A4_R1.obj, A7_R1.obj, file = "/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/R1_objs.RData")
+```
+
+### These are the new datasets (2/8/22) -- might not be able to use soupx on these new data because aggr no longer outputs the raw files
+```{r}
+workdir <- "/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/cellranger/cellrangeraggr/outputs/"
+
+A4E_R2.obj <- Read10X(paste(workdir, "A4E_outs/count/filtered_feature_bc_matrix/", sep = ""))
+A4E_R2.obj <- CreateSeuratObject(counts = A4E_R2.obj, project = "A4E_R2", min.cells = 3, min.features = 200)
+
+A4_R3.obj <- Read10X(paste(workdir, "A4_outs/count/filtered_feature_bc_matrix", sep = ""))
+A4_R3.obj <- CreateSeuratObject(counts = A4_R3.obj, project = "A4_R3", min.cells = 3, min.features = 200)
+
+A7_R2.obj <- Read10X(paste(workdir, "A7_outs/count/filtered_feature_bc_matrix", sep = ""))
+A7_R2.obj <- CreateSeuratObject(counts = A7_R2.obj, project = "A7_R2", min.cells = 3, min.features = 200)
+
+Y4_R2.obj <- Read10X(paste(workdir, "Y4_outs/count/filtered_feature_bc_matrix", sep = ""))
+Y4_R2.obj <- CreateSeuratObject(counts = Y4_R2.obj, project = "Y4_R2", min.cells = 3, min.features = 200)
+
+Y7_R2.obj <- Read10X(paste(workdir, "Y7_outs/count/filtered_feature_bc_matrix", sep = ""))
+Y7_R2.obj <- CreateSeuratObject(counts = Y7_R2.obj, project = "Y7_R2", min.cells = 3, min.features = 200)
+```
+
+### WITH SoupX - Use 2/14/22 - had to rerun with count and aggr with cellranger3.0.1 to make these raw filtered files 
+```{r}
+
+workdir <- "/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/cellranger/cellrangeraggr/outputs_cellrangerv3/"
+
+A4E_R2.obj<- load10X(paste(workdir, "A4Eouts/", sep = ""))
+count = autoEstCont(A4E_R2.obj,tfidfMin = 0.5, forceAccept = T)
+out = adjustCounts(count)
+A4E_R2.obj <- CreateSeuratObject(counts = out, project = "snRNAseq", min.cells = 3, min.features = 200)
+
+A4_R3.obj <- load10X(paste(workdir, "A4outs/", sep = ""))
+count = autoEstCont(A4_R3.obj,tfidfMin = 0.5, forceAccept = T)
+out = adjustCounts(count)
+A4_R3.obj <- CreateSeuratObject(counts = out, project = "snRNAseq", min.cells = 3, min.features = 200)
+
+A7_R2.obj <- load10X(paste(workdir, "A7outs/", sep = ""))
+count = autoEstCont(A7_R2.obj,tfidfMin = 0.5, forceAccept = T)
+out = adjustCounts(count)
+A7_R2.obj <- CreateSeuratObject(counts = out, project = "snRNAseq", min.cells = 3, min.features = 200)
+
+Y4_R2.obj <- load10X(paste(workdir, "Y4outs/", sep = ""))
+count = autoEstCont(Y4_R2.obj,tfidfMin = 0.5, forceAccept = T)
+out = adjustCounts(count)
+Y4_R2.obj <- CreateSeuratObject(counts = out, project = "snRNAseq", min.cells = 3, min.features = 200)
+
+Y7_R2.obj <- load10X(paste(workdir, "Y7outs/", sep = ""))
+count = autoEstCont(Y7_R2.obj,tfidfMin = 0.5, forceAccept = T)
+out = adjustCounts(count)
+Y7_R2.obj <- CreateSeuratObject(counts = out, project = "snRNAseq", min.cells = 3, min.features = 200)
+
+save(A4E_R2.obj, A4_R3.obj, A7_R2.obj, Y4_R2.obj, Y7_R2.obj,file = "/Users/jessekurland/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/R2_objs.RData")
+
+```
+
+### Adding in metadata to old data
+```{r}
+Y0.obj@meta.data$cell.id <- 'Y0'
+A0.obj@meta.data$cell.id <- 'A0'
+Y4_R1.obj@meta.data$cell.id <- 'Y4_R1'
+Y7_R1.obj@meta.data$cell.id <- 'Y7_R1'
+A4_R1.obj@meta.data$cell.id <- 'A4_R1'
+A7_R1.obj@meta.data$cell.id <- 'A7_R1'
+
+Y0.obj@meta.data$condition.id <- 'Young'
+A0.obj@meta.data$condition.id <- 'Aged'
+Y4_R1.obj@meta.data$condition.id <- 'Young'
+Y7_R1.obj@meta.data$condition.id <- 'Young'
+A4_R1.obj@meta.data$condition.id <- 'Aged'
+A7_R1.obj@meta.data$condition.id <- 'Aged'
+
+Y0.obj@meta.data$injury.dpi <- '0dpi'
+A0.obj@meta.data$injury.dpi <- '0dpi'
+Y4_R1.obj@meta.data$injury.dpi <- '4dpi'
+Y7_R1.obj@meta.data$injury.dpi <- '7dpi'
+A4_R1.obj@meta.data$injury.dpi <- '4dpi'
+A7_R1.obj@meta.data$injury.dpi <- '7dpi'
+
+Y0.obj@meta.data$replicate.number <- 'R1'
+A0.obj@meta.data$replicate.number <- 'R1'
+Y4_R1.obj@meta.data$replicate.number <- 'R1'
+Y7_R1.obj@meta.data$replicate.number <- 'R1'
+A4_R1.obj@meta.data$replicate.number <- 'R1'
+A7_R1.obj@meta.data$replicate.number <- 'R1'
+```
+
+### Adding in metadata to new data
+```{r}
+A4E_R2.obj@meta.data$cell.id <- 'A4_R2'
+A4_R3.obj@meta.data$cell.id <- 'A4_R3'
+A7_R2.obj@meta.data$cell.id <- 'A7_R2'
+Y4_R2.obj@meta.data$cell.id <- 'Y4_R2'
+Y7_R2.obj@meta.data$cell.id <- 'Y7_R2'
+
+A4E_R2.obj@meta.data$condition.id <- 'Aged'
+A4_R3.obj@meta.data$condition.id <- 'Aged'
+A7_R2.obj@meta.data$condition.id <- 'Aged'
+Y4_R2.obj@meta.data$condition.id <- 'Young'
+Y7_R2.obj@meta.data$condition.id <- 'Young'
+
+A4E_R2.obj@meta.data$injury.dpi <- '4dpi'
+A4_R3.obj@meta.data$injury.dpi <- '4dpi'
+A7_R2.obj@meta.data$injury.dpi <- '7dpi'
+Y4_R2.obj@meta.data$injury.dpi <- '4dpi'
+Y7_R2.obj@meta.data$injury.dpi <- '7dpi'
+
+A4E_R2.obj@meta.data$replicate.number <- 'R2'
+A4_R3.obj@meta.data$replicate.number <- 'R2'
+A7_R2.obj@meta.data$replicate.number <- 'R2'
+Y4_R2.obj@meta.data$replicate.number <- 'R2'
+Y7_R2.obj@meta.data$replicate.number <- 'R2'
+```
+
+### pre-cleaning violin plots
+```{r}
+mito.and.doublets.fun <- function(seurat.obj)
+{
+  seurat.obj[["percent.mt"]] <- PercentageFeatureSet(seurat.obj, pattern = "mt-")
+  print(VlnPlot(seurat.obj, features = c("nFeature_RNA" , "nCount_RNA", "percent.mt"), ncol = 3))
+}
+
+cleanup.fun <- function(seurat.obj)
+{
+  subset(seurat.obj, subset = nFeature_RNA > 200 & nFeature_RNA < 2500 & percent.mt < 5)
+}
+```
+
+```{r}
+mito.and.doublets.fun(Y0.obj)
+mito.and.doublets.fun(A0.obj)
+mito.and.doublets.fun(Y4_R1.obj)
+mito.and.doublets.fun(Y7_R1.obj)
+mito.and.doublets.fun(A4_R1.obj)
+mito.and.doublets.fun(A7_R1.obj)
+mito.and.doublets.fun(A4E_R2.obj)
+mito.and.doublets.fun(A4_R3.obj)
+mito.and.doublets.fun(A7_R2.obj)
+mito.and.doublets.fun(Y4_R2.obj)
+mito.and.doublets.fun(Y7_R2.obj)
+```
+
+```{r}
+Y0.obj[["percent.mt"]] <- PercentageFeatureSet(Y0.obj, pattern = "mt-")
+A0.obj[["percent.mt"]] <- PercentageFeatureSet(A0.obj, pattern = "mt-")
+Y4_R1.obj[["percent.mt"]] <- PercentageFeatureSet(Y4_R1.obj, pattern = "mt-")
+Y7_R1.obj[["percent.mt"]] <- PercentageFeatureSet(Y7_R1.obj, pattern = "mt-")
+Y4_R1.obj[["percent.mt"]] <- PercentageFeatureSet(Y4_R1.obj, pattern = "mt-")
+A4_R1.obj[["percent.mt"]] <- PercentageFeatureSet(A4_R1.obj, pattern = "mt-")
+A7_R1.obj[["percent.mt"]] <- PercentageFeatureSet(A7_R1.obj, pattern = "mt-")
+A4E_R2.obj[["percent.mt"]] <- PercentageFeatureSet(A4E_R2.obj, pattern = "mt-")
+A4_R3.obj[["percent.mt"]] <- PercentageFeatureSet(A4_R3.obj, pattern = "mt-")
+A7_R2.obj[["percent.mt"]] <- PercentageFeatureSet(A7_R2.obj, pattern = "mt-")
+Y4_R2.obj[["percent.mt"]] <- PercentageFeatureSet(Y4_R2.obj, pattern = "mt-")
+Y7_R2.obj[["percent.mt"]] <- PercentageFeatureSet(Y7_R2.obj, pattern = "mt-")
+
+#A0.obj.copy <- A0.obj
+#Y0.obj.copy <- Y0.obj
+
+Y0.obj <- cleanup.fun(Y0.obj)
+A0.obj <- cleanup.fun(A0.obj)
+
+Y4_R1.obj <- cleanup.fun(Y4_R1.obj)
+Y7_R1.obj <- cleanup.fun(Y7_R1.obj)
+A4_R1.obj <- cleanup.fun(A4_R1.obj)
+A7_R1.obj <- cleanup.fun(A7_R1.obj)
+
+A4E_R2.obj <- cleanup.fun(A4E_R2.obj)
+A4_R3.obj <- cleanup.fun(A4_R3.obj)
+A7_R2.obj <- cleanup.fun(A7_R2.obj)
+Y4_R2.obj <- cleanup.fun(Y4_R2.obj)
+Y7_R2.obj <- cleanup.fun(Y7_R2.obj)
+
+mito.and.doublets.fun(Y0.obj)
+mito.and.doublets.fun(A0.obj)
+mito.and.doublets.fun(Y4_R1.obj)
+mito.and.doublets.fun(Y7_R1.obj)
+mito.and.doublets.fun(A4_R1.obj)
+mito.and.doublets.fun(A7_R1.obj)
+mito.and.doublets.fun(A4E_R2.obj)
+mito.and.doublets.fun(A4_R3.obj)
+mito.and.doublets.fun(A7_R2.obj)
+mito.and.doublets.fun(Y4_R2.obj)
+mito.and.doublets.fun(Y7_R2.obj)
+```
+
+### Merging data
+```{r}
+merged <- merge(Y0.obj, c(A0.obj, Y4_R1.obj, Y7_R1.obj, A4_R1.obj, A7_R1.obj, A4E_R2.obj, A4_R3.obj, A7_R2.obj, Y4_R2.obj, Y7_R2.obj))
+```
+
+```{r}
+#save(Y0.obj, A0.obj, Y4_R1.obj, Y7_R1.obj, A4_R1.obj, A7_R1.obj, A4E_R2.obj, A4_R3.obj, A7_R2.obj, Y4_R2.obj, Y7_R2.obj,
+     file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/cleaned_objects.RData")
+#save(merged,
+     file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/merged_objects.RData")
+
+load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/merged_objects.RData")
+load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/cleaned_objects.RData")
+
+
+rm(Y0.obj, A0.obj, Y4_R1.obj, Y7_R1.obj, A4_R1.obj, A7_R1.obj, A4E_R2.obj, A4_R3.obj, A7_R2.obj, Y4_R2.obj, Y7_R2.obj)
+```
+
+### To fix memory exhaust limit -- works! - was only necessary once
+```{r}
+install.packages(usethis)
+library(usethis) 
+usethis::edit_r_environ()
+```
+
+### ### ### ### ### rpca integration
+### Have to do pca first
+```{r}
+merged <- NormalizeData(merged, normalization.method = "LogNormalize", scale.factor = 10000)
+merged <- FindVariableFeatures(merged, selection.method = "vst", nfeatures = 2000) #swapped this ahead of the scale_data 
+merged <- ScaleData(merged, features = VariableFeatures(object = merged) ) 
+merged <- RunPCA(merged, features = VariableFeatures(object = merged))
+```
+
+### Saving
+```{r}
+#save(merged,
+     file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/merged_object_pca.RData")
+
+### *** MERGED OBJECT WITH PCA ***
+load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/merged_object_pca.RData")
+
+```
+
+### rpca integration by injury.dpi --- GOOD ONE
+```{r}
+list <- SplitObject(merged, split.by = "injury.dpi")
+rm(merged)
+
+## Took ___hrs
+anchors.rpca <- FindIntegrationAnchors(list, dims = 1:20, anchor.features = 2000, reduction = 'rpca') # rpca algorithim
+rm(list)
+
+#save(anchors, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/anchor_object.RData") 
+
+aged.young.injury.integrated.rpca.injury.dpi <- IntegrateData(anchors.rpca, dims = 1:20 )
+save(aged.young.injury.integrated.rpca.injury.dpi, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/aged_young_integrated_by_injuryid_rpca_15.RData") 
+#load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/aged_young_injury_integrated_rpca.RData")
+
+```
+
+### Try sctransform - run tonight
+```{r}
+if (!requireNamespace("BiocManager", quietly = TRUE)) install.packages("BiocManager")
+
+BiocManager::install("glmGamPoi")
+library(glmGamPoi)
+```
+
+### this takes too long - try overnight tonight
+```{r}
+aged.young.injury.integrated.rpca.injury.dpi.sct.trasnform <- SCTransform(aged.young.injury.integrated.rpca.injury.dpi, method = "glmGamPoi", vars.to.regress = "percent.mt", verbose = FALSE)
+
+aged.young.injury.integrated.rpca.injury.dpi.sct.trasnform <- RunPCA(aged.young.injury.integrated.rpca.injury.dpi.sct.trasnform, verbose = FALSE)
+aged.young.injury.integrated.rpca.injury.dpi.sct.trasnform <- RunUMAP(aged.young.injury.integrated.rpca.injury.dpi.sct.trasnform, dims = 1:20, verbose = FALSE)
+
+aged.young.injury.integrated.rpca.injury.dpi.sct.trasnform <- FindNeighbors(aged.young.injury.integrated.rpca.injury.dpi.sct.trasnform, dims = 1:20, verbose = FALSE)
+aged.young.injury.integrated.rpca.injury.dpi.sct.trasnform <- FindClusters(aged.young.injury.integrated.rpca.injury.dpi.sct.trasnform, verbose = FALSE)
+DimPlot(aged.young.injury.integrated.rpca.injury.dpi.sct.trasnform, label = TRUE) + NoLegend()
+```
+
+
+### regular UMAP of rpca integration of injury.id split with lower dimensions to try to group myonuclei together
+```{r}
+dims = 1:15 # 15 looks good
+min.dist = 0.05
+n.neighbors = 200
+npcs = 30
+resolution = 0.2
+algorithim = 1
+
+
+
+  DefaultAssay(aged.young.injury.integrated.rpca.injury.dpi) <- "integrated"
+  aged.young.injury.integrated.rpca.injury.dpi.umap <- ScaleData(aged.young.injury.integrated.rpca.injury.dpi, verbose = FALSE)
+  aged.young.injury.integrated.rpca.injury.dpi.umap <- RunPCA(aged.young.injury.integrated.rpca.injury.dpi.umap, npcs = npcs, verbose = FALSE)
+  aged.young.injury.integrated.rpca.injury.dpi.umap <- RunUMAP(aged.young.injury.integrated.rpca.injury.dpi.umap, reduction = "pca",  
+                                    n.neighbors = n.neighbors, 
+                                    min.dist = min.dist, 
+                                    dims = dims) 
+  aged.young.injury.integrated.rpca.injury.dpi.umap <- FindNeighbors(aged.young.injury.integrated.rpca.injury.dpi.umap)
+  aged.young.injury.integrated.rpca.injury.dpi.umap <<- FindClusters(aged.young.injury.integrated.rpca.injury.dpi.umap, resolution = resolution, algorithim = algorithim)
+
+  DefaultAssay(aged.young.injury.integrated.rpca.injury.dpi.umap) <- "RNA"
+
+  #aged.young.injury.integrated.rpca.injury.dpi.umap <- rpca2.umap
+
+DimPlot(aged.young.injury.integrated.rpca.injury.dpi.umap, pt.size = 1, label = T)
+DimPlot(aged.young.injury.integrated.rpca.injury.dpi.umap, pt.size = 1, label = T, group.by = 'cell.id')
+DimPlot(aged.young.injury.integrated.rpca.injury.dpi.umap, pt.size = 1, label = T, group.by = 'condition.id')
+DimPlot(aged.young.injury.integrated.rpca.injury.dpi.umap, pt.size = 1, label = T, group.by = 'injury.dpi')
+DimPlot(aged.young.injury.integrated.rpca.injury.dpi.umap, pt.size = 1, label = T, group.by = 'replicate.number')
+
+
+exploratory.genelist <- c("Pax7", "Ttn", "Neb", "Pdgfra", "Pecam1", "Ache", "Chrna1", "Col22a1", "Myh1", "Myh4", "Myh2", "Myh3", "Myh8", 'Cd74')
+FeaturePlot(aged.young.injury.integrated.rpca.injury.dpi.umap, features = exploratory.genelist)
+
+#save(aged.young.injury.integrated.umap, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/aged.young.injury.integrated.umap1.RData")
+```
+### Markers -- run tonight
+```{r}
+seurat.markers <- FindAllMarkers(aged.young.injury.integrated.rpca.injury.dpi.umap)
+seurat.markers %>% group_by(cluster) %>% top_n(wt = avg_log2FC, n = 20)
+```
+
+### Myogenic nuclei subsetting - just see how large object would be for monocle if emove cd74 and other weird non-myogenic clusters
+```{r}
+myogenic.subset.umap <- subset(aged.young.injury.integrated.rpca.injury.dpi.umap, Pax7 > 0 | Myod1 > 0 | Myog > 0 | Ckm > 0 | Mylk2 > 0)
+
+myogenic.subset.umap <- subset(x = myogenic.subset.umap, Cd74 > 0 | Pecam1 > 0, invert = T)
+
+myogenic.subset.umap.clusters <- subset(myogenic.subset.umap, idents = c(0, 6, 12, 9, 5, 10), invert = T)
+
+exploratory.genelist <- c("Pax7", "Ttn", "Neb", "Pdgfra", "Pecam1", "Ache", "Chrna1", "Col22a1", "Myh1", "Myh4", "Myh2", "Myh3", "Myh8", 'Cd74', "Myog", "Myod1")
+
+
+
+DimPlot(myogenic.subset.umap, pt.size = 1, label = T)
+FeaturePlot(myogenic.subset.umap, features = exploratory.genelist)
+
+DimPlot(myogenic.subset.umap.clusters, pt.size = 1, label = T)
+FeaturePlot(myogenic.subset.umap.clusters, features = exploratory.genelist)
+
+```
+### More markers
+```{r}
+myogenic.subset.umap.clusters.copy <- SetIdent(myogenic.subset.umap.clusters, value = 'injury.dpi')
+dpi4_dpi7.markers <- FindMarkers(myogenic.subset.umap.clusters.copy, ident.1 = '4dpi', ident.2 = '7dpi')
+
+dpi4_dpi7.markers %>% top_n(wt = avg_log2FC, n = 200)
+dpi4_dpi7.markers %>% top_n(wt = avg_log2FC, n = -200)
+
+
+myogenic.subset.4dpi.7dpi <- subset(myogenic.subset.umap.clusters.copy, idents = c('4dpi', '7dpi'))
+myogenic.subset.4dpi.7dpi <- SetIdent(myogenic.subset.4dpi.7dpi, value = 'condition.id')
+dpi4_dpi7.condition.markers <- FindMarkers(myogenic.subset.4dpi.7dpi, ident.1 = 'Aged', ident.2 = 'Young')
+
+dpi4_dpi7.condition.markers %>% top_n(wt = avg_log2FC, n = -200)
+
+```
+### Look for genes from before 
+```{r}
+genelist <- c("Meg3", "Rian", "Mirg", "Runx1", "Myod1", "Myog", "Peg3", "Ncam1", "Myh3", "Ebf1", "Pdgfra", "Mef2c", "Col5a3", "Col3a1", "Hs3st5", "Musk")
+myogenic.subset.umap.clusters <- SetIdent(myogenic.subset.umap.clusters, value = 'injury.dpi')
+VlnPlot(myogenic.subset.umap.clusters, features = genelist, pt.size = 0, split.by = 'condition.id', split.plot = T )
+```
+
+
+```{r}
+doublet_fun <- function(individual.seurat.obj)
+{
+  individual.seurat.obj <- NormalizeData(individual.seurat.obj, normalization.method = "LogNormalize", scale.factor = 10000)
+  individual.seurat.obj <- FindVariableFeatures(individual.seurat.obj, selection.method = "vst", nfeatures = 2000) #swapped this ahead of the scale_data 
+  
+
+
+  
+  individual.seurat.obj <- RunPCA(individual.seurat.obj, features = VariableFeatures(object = individual.seurat.obj))
+  nExp <- round(ncol(individual.seurat.obj) * 0.1) # estimated 5% doublet contamination
+  
+  
+  individual.seurat.obj <- doubletFinder_v3(individual.seurat.obj, pN = 0.25, pK = 0.09, nExp = nExp, PCs = 1:10, sct = TRUE)
+  DF.name <<- colnames(individual.seurat.obj@meta.data)[grepl("DF.classification", colnames(individual.seurat.obj@meta.data))]
+  return(individual.seurat.obj)
+  return(DF.name)
+  print(cowplot::plot_grid(ncol = 2, DimPlot(individual.seurat.obj, group.by = "orig.ident",  reduction = 'pca') + NoAxes(),
+                           DimPlot(individual.seurat.obj, group.by = DF.name, reduction = 'pca') + NoAxes()))
+}
+
+```
+
+```{r}
+A0.obj <- doublet_fun(A0.obj)
+DimPlot(A0.obj, group.by = DF.name, reduction = 'pca')
+
+Y0.obj <- doublet_fun(Y0.obj)
+DimPlot(Y0.obj, group.by = DF.name, reduction = 'pca')
+
+#-----
+
+A4_R1.obj <- doublet_fun(A4_R1.obj)
+DimPlot(A4_R1.obj, group.by = DF.name, reduction = 'pca')
+
+A4E_R2.obj <- doublet_fun(A4E_R2.obj)
+DimPlot(A4E_R2.obj, group.by = DF.name, reduction = 'pca')
+
+A4_R3.obj <- doublet_fun(A4_R3.obj)
+DimPlot(A4_R3.obj, group.by = DF.name, reduction = 'pca')
+
+A7_R1.obj <- doublet_fun(A7_R1.obj)
+DimPlot(A7_R1.obj, group.by = DF.name, reduction = 'pca')
+
+A7_R2.obj <- doublet_fun(A7_R2.obj)
+DimPlot(A7_R2.obj, group.by = DF.name, reduction = 'pca')
+
+#-----
+
+Y4_R1.obj <- doublet_fun(Y4_R1.obj)
+DimPlot(Y4_R1.obj, group.by = DF.name, reduction = 'pca')
+
+Y4_R2.obj <- doublet_fun(Y4_R2.obj)
+DimPlot(Y4_R2.obj, group.by = DF.name, reduction = 'pca')
+
+Y7_R1.obj <- doublet_fun(Y7_R1.obj)
+DimPlot(Y7_R1.obj, group.by = DF.name, reduction = 'pca')
+
+Y7_R2.obj <- doublet_fun(Y7_R2.obj)
+DimPlot(Y7_R2.obj, group.by = DF.name, reduction = 'pca')
+
+
+
+```
+```{r}
+DimPlot(A0.obj, group.by = 'DF.classifications_0.25_0.09_118', reduction = 'pca')
+DimPlot(Y0.obj, group.by = 'DF.classifications_0.25_0.09_112', reduction = 'pca')
+DimPlot(A4_R1.obj, group.by = 'DF.classifications_0.25_0.09_20', reduction = 'pca')
+DimPlot(A4E_R2.obj, group.by = 'DF.classifications_0.25_0.09_783', reduction = 'pca')
+DimPlot(A7_R1.obj, group.by = 'DF.classifications_0.25_0.09_22', reduction = 'pca')
+DimPlot(A7_R2.obj, group.by = 'DF.classifications_0.25_0.09_2337', reduction = 'pca')
+DimPlot(Y4_R1.obj, group.by = 'DF.classifications_0.25_0.09_55', reduction = 'pca')
+DimPlot(Y4_R2.obj, group.by = 'DF.classifications_0.25_0.09_1056', reduction = 'pca')
+DimPlot(Y7_R1.obj, group.by = 'DF.classifications_0.25_0.09_26', reduction = 'pca')
+DimPlot(Y7_R2.obj, group.by = 'DF.classifications_0.25_0.09_1553', reduction = 'pca')
+
+```
+
+### Try Monocle - if takes too long try running tonight
+### Monocle ###
+
+### Function
+```{r}
+main.function <- function(seurat.merged.obj, cth)
+{
+      data <- as(as.matrix(seurat.merged.obj@assays$RNA@data), 'sparseMatrix') 
+      pd <- new('AnnotatedDataFrame', data = seurat.merged.obj@meta.data)
+      fData <- data.frame(gene_short_name = row.names(data), row.names = row.names(data))
+      fd <- new('AnnotatedDataFrame', data = fData)
+      monocle.obj <- newCellDataSet(data,phenoData = pd,
+                                    featureData = fd,
+                                    lowerDetectionLimit = 0.5,
+                                    expressionFamily = negbinomial.size())
+
+      monocle.obj <- classifyCells(monocle.obj, cth, 0.1)
+      print(table(pData(monocle.obj)$CellType))
+      
+      monocle.obj <- detectGenes(monocle.obj, min_expr = 0.1)
+      expressed_genes.monocle.obj <- row.names(subset(fData(monocle.obj), num_cells_expressed >= 5))
+
+      monocle.obj <- estimateSizeFactors(monocle.obj)
+      monocle.obj <- estimateDispersions(monocle.obj)
+
+      marker_diff.monocle.obj <- markerDiffTable(monocle.obj[expressed_genes.monocle.obj,], 
+                                                 cth, 
+                                                 residualModelFormulaStr = "~num_genes_expressed")
+
+      diff_test_res.monocle.obj <- differentialGeneTest(monocle.obj[expressed_genes.monocle.obj,],
+                                                        fullModelFormulaStr = "~CellType")
+      
+      ordering_genes.monocle.obj <- row.names(subset(diff_test_res.monocle.obj, qval < 0.01))
+      
+      monocle.obj <- setOrderingFilter(monocle.obj, ordering_genes.monocle.obj)
+      
+      monocle.obj <- reduceDimension(monocle.obj, max_components = 3, num_dim = 3,
+        norm_method = 'log',
+        reduction_method = 'tSNE',
+        residualModelFormulaStr = "~CellType + num_genes_expressed",
+        verbose = T, 
+        check_duplicates = F)
+      
+      monocle.obj <- clusterCells(monocle.obj, num_clusters = 2)
+
+      monocle.obj <- reduceDimension(monocle.obj, 
+                                     max_components = 2,
+                                     method = 'DDRTree',
+                                     auto_param_selection = F)
+      
+      monocle.obj <- orderCells(monocle.obj, reverse = TRUE)
+      
+      monocle.new.name <<- monocle.obj 
+}
+```
+
+
+### Making cth
+```{r}
+x <- myogenic.subset.umap.clusters
+data <- as(as.matrix(x@assays$RNA@data), 'sparseMatrix') 
+pd <- new('AnnotatedDataFrame', data = x@meta.data)
+fData <- data.frame(gene_short_name = row.names(data), row.names = row.names(data))
+fd <- new('AnnotatedDataFrame', data = fData)
+x <- newCellDataSet(data,phenoData = pd,featureData = fd,lowerDetectionLimit = 0.5,expressionFamily = negbinomial.size())
+
+pax7_id <- row.names(subset(fData(x), gene_short_name == "Pax7"))
+myf5_id <- row.names(subset(fData(x), gene_short_name == "Myf5"))
+myog_id <- row.names(subset(fData(x), gene_short_name == "Myog"))
+myod_id <- row.names(subset(fData(x), gene_short_name == "Myod1"))
+
+myh1_id <- row.names(subset(fData(x), gene_short_name == "Myh1"))
+myh2_id <- row.names(subset(fData(x), gene_short_name == "Myh2")) 
+myh4_id <- row.names(subset(fData(x), gene_short_name == "Myh4")) 
+
+tmem_id <- row.names(subset(fData(x), gene_short_name == "Tmem38a")) 
+
+
+cth <- newCellTypeHierarchy()
+cth <- addCellType(cth, "MuSC", classify_func = function(x) { x[pax7_id,] > 0  | x[myf5_id,] > 0 })
+cth <- addCellType(cth, "early", classify_func = function(x) { x[myod_id,] > 0 | x[myog_id,] > 0 })
+cth <- addCellType(cth, "Myonuclei", classify_func = function(x){ x[myh1_id,] > 0 | x[myh4_id,] > 0 | x[tmem_id,] > 0})
+```
+
+### run tonight
+```{r}
+main.function(myogenic.subset.umap.clusters, cth)
+myogenic.subset.umap.clusters.monocle <- monocle.new.name
+```
+
+
+#### ### PREVIOUS RUN THROUGH ####
+#### ### PREVIOUS RUN THROUGH ####
+#### ### PREVIOUS RUN THROUGH ####
+#### ### PREVIOUS RUN THROUGH ####
+#### ### PREVIOUS RUN THROUGH ####
+#### ### PREVIOUS RUN THROUGH ####
+#### ### PREVIOUS RUN THROUGH ####
+#### ### PREVIOUS RUN THROUGH ####
+#### ### PREVIOUS RUN THROUGH ####
+#### ### PREVIOUS RUN THROUGH ####
+#### ### PREVIOUS RUN THROUGH ####
+#### ### PREVIOUS RUN THROUGH ####
+#### ### PREVIOUS RUN THROUGH ####
+#### ### PREVIOUS RUN THROUGH ####
+
+
+
+
+
+### Try with CCA first
+```{r}
+list <- SplitObject(merged, split.by = "condition.id")
+rm(merged)
+
+## Took ~3hrs
+anchors <- FindIntegrationAnchors(list, dims = 1:20, anchor.features = 2000) # Use default algorithim here - CCA
+rm(list)
+
+#save(anchors, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/anchor_object.RData") 
+
+aged.young.injury.integrated <- IntegrateData(anchors, dims = 1:20 )
+#save(aged.young.injury.integrated, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/aged.young.injury.integrated.RData") 
+
+```
+
+### CCA integration
+```{r}
+dims = 1:30
+min.dist = 0.05
+n.neighbors = 200
+npcs = 30
+resolution = 0.5
+algorithim = 1
+
+
+
+  DefaultAssay(aged.young.injury.integrated) <- "integrated"
+  aged.young.injury.integrated.umap <- ScaleData(aged.young.injury.integrated, verbose = FALSE)
+  aged.young.injury.integrated.umap <- RunPCA(aged.young.injury.integrated.umap, npcs = npcs, verbose = FALSE)
+  aged.young.injury.integrated.umap <- RunUMAP(aged.young.injury.integrated.umap, reduction = "pca",  
+                                    n.neighbors = n.neighbors, 
+                                    min.dist = min.dist, 
+                                    dims = dims) 
+  aged.young.injury.integrated.umap <- FindNeighbors(aged.young.injury.integrated.umap)
+  aged.young.injury.integrated.umap <<- FindClusters(aged.young.injury.integrated.umap, resolution = resolution, algorithim = algorithim)
+  #return(integrated.rpca.object)
+
+  DefaultAssay(aged.young.injury.integrated.umap) <- "RNA"
+
+  plotting.umap <- aged.young.injury.integrated.umap
+
+DimPlot(plotting.umap, pt.size = 1, label = T, group.by = 'cell.id')
+DimPlot(plotting.umap, pt.size = 1, label = T, group.by = 'condition.id')
+DimPlot(plotting.umap, pt.size = 1, label = T, group.by = 'injury.dpi')
+DimPlot(plotting.umap, pt.size = 1, label = T, group.by = 'replicate.number')
+
+
+exploratory.genelist <- c("Pax7", "Ttn", "Neb", "Pdgfra", "Pecam1", "Ache", "Chrna1", "Col22a1", "Mpz", "Dcn", "Cd45")
+FeaturePlot(plotting.umap, features = exploratory.genelist)
+
+#save(aged.young.injury.integrated.umap, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/aged.young.injury.integrated.umap1.RData")
+```
+
+### ### ### ### ### Try with rpca
+### Have to do pca first
+```{r}
+merged <- NormalizeData(merged, normalization.method = "LogNormalize", scale.factor = 10000)
+merged <- FindVariableFeatures(merged, selection.method = "vst", nfeatures = 2000) #swapped this ahead of the scale_data 
+merged <- ScaleData(merged, features = VariableFeatures(object = merged) ) 
+merged <- RunPCA(merged, features = VariableFeatures(object = merged))
+```
+### This merged will have pca in it***
+```{r}
+#save(merged,
+     file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/merged_object_pca.RData")
+
+### *** MERGED OBJECT WITH PCA ***
+load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/merged_object_pca.RData")
+
+
+#load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/merged_objects.RData") 
+```
+
+### rpca integration by condition.id --- I think the OTHER one looks better (injury.dpi)
+```{r}
+list <- SplitObject(merged, split.by = "condition.id")
+rm(merged)
+
+## Took ___hrs
+anchors.rpca <- FindIntegrationAnchors(list, dims = 1:20, anchor.features = 2000, reduction = 'rpca') # rpca algorithim
+rm(list)
+
+#save(anchors, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/anchor_object.RData") ### NOT USED
+
+aged.young.injury.integrated.rpca <- IntegrateData(anchors.rpca, dims = 1:20 )
+#save(aged.young.injury.integrated.rpca, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/aged_young_injury_integrated_rpca.RData") ### NOT USED
+
+```
+### Dimplotting of condition.id rpca
+```{r}
+
+```
+
+```{r}
+### *** MERGED OBJECT WITH PCA ***
+load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/merged_object_pca.RData")
+```
+
+### rpca integration by injury.dpi --- I think this is a good one, but may need to lower the dimensions to try to group myonuclei together
+```{r}
+list <- SplitObject(merged, split.by = "injury.dpi")
+rm(merged)
+
+## Took ___hrs
+anchors.rpca <- FindIntegrationAnchors(list, dims = 1:20, anchor.features = 2000, reduction = 'rpca') # rpca algorithim
+rm(list)
+
+#save(anchors, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/anchor_object.RData") 
+
+aged.young.injury.integrated.rpca.injury.dpi <- IntegrateData(anchors.rpca, dims = 1:20 )
+save(aged.young.injury.integrated.rpca.injury.dpi, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/aged_young_integrated_by_injuryid_rpca_15.RData") 
+#load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/aged_young_injury_integrated_rpca.RData")
+
+```
+
+### Dimplotting of injury.id rpca
+```{r}
+dims = 1:30
+min.dist = 0.05
+n.neighbors = 200
+npcs = 30
+resolution = 0.5
+algorithim = 1
+
+
+
+  DefaultAssay(aged.young.injury.integrated.rpca) <- "integrated"
+  aged.young.injury.integrated.rpca.umap <- ScaleData(aged.young.injury.integrated.rpca, verbose = FALSE)
+  aged.young.injury.integrated.rpca.umap <- RunPCA(aged.young.injury.integrated.rpca.umap, npcs = npcs, verbose = FALSE)
+  aged.young.injury.integrated.rpca.umap <- RunUMAP(aged.young.injury.integrated.rpca.umap, reduction = "pca",  
+                                    n.neighbors = n.neighbors, 
+                                    min.dist = min.dist, 
+                                    dims = dims) 
+  aged.young.injury.integrated.rpca.umap <- FindNeighbors(aged.young.injury.integrated.rpca.umap)
+  aged.young.injury.integrated.rpca.umap <<- FindClusters(aged.young.injury.integrated.rpca.umap, resolution = resolution, algorithim = algorithim)
+  #return(integrated.rpca.object)
+
+  DefaultAssay(aged.young.injury.integrated.rpca.umap) <- "RNA"
+
+  plotting.umap <- aged.young.injury.integrated.rpca.umap
+
+DimPlot(plotting.umap, pt.size = 1, label = T, group.by = 'cell.id')
+DimPlot(plotting.umap, pt.size = 1, label = T, group.by = 'condition.id')
+DimPlot(plotting.umap, pt.size = 1, label = T, group.by = 'injury.dpi')
+DimPlot(plotting.umap, pt.size = 1, label = T, group.by = 'replicate.number')
+
+
+exploratory.genelist <- c("Pax7", "Ttn", "Neb", "Pdgfra", "Pecam1", "Ache", "Chrna1", "Col22a1", "Mpz", "Dcn", "Cd45")
+FeaturePlot(plotting.umap, features = exploratory.genelist)
+
+#save(aged.young.injury.integrated.umap, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/aged.young.injury.integrated.umap1.RData")
+```
+
+### rpca integration #2 of injury.id split with lower dimensions to try to group myonuclei together
+```{r}
+dims = 1:15 # 15 looks good
+min.dist = 0.05
+n.neighbors = 200
+npcs = 30
+resolution = 0.2
+algorithim = 1
+
+
+
+  DefaultAssay(aged.young.injury.integrated.rpca.injury.dpi) <- "integrated"
+  aged.young.injury.integrated.rpca.injury.dpi.umap <- ScaleData(aged.young.injury.integrated.rpca.injury.dpi, verbose = FALSE)
+  aged.young.injury.integrated.rpca.injury.dpi.umap <- RunPCA(aged.young.injury.integrated.rpca.injury.dpi.umap, npcs = npcs, verbose = FALSE)
+  aged.young.injury.integrated.rpca.injury.dpi.umap <- RunUMAP(aged.young.injury.integrated.rpca.injury.dpi.umap, reduction = "pca",  
+                                    n.neighbors = n.neighbors, 
+                                    min.dist = min.dist, 
+                                    dims = dims) 
+  aged.young.injury.integrated.rpca.injury.dpi.umap <- FindNeighbors(aged.young.injury.integrated.rpca.injury.dpi.umap)
+  aged.young.injury.integrated.rpca.injury.dpi.umap <<- FindClusters(aged.young.injury.integrated.rpca.injury.dpi.umap, resolution = resolution, algorithim = algorithim)
+  #return(integrated.rpca.object)
+
+  DefaultAssay(aged.young.injury.integrated.rpca.injury.dpi.umap) <- "RNA"
+
+  #aged.young.injury.integrated.rpca.injury.dpi.umap <- rpca2.umap
+
+DimPlot(aged.young.injury.integrated.rpca.injury.dpi.umap, pt.size = 1, label = T, group.by = 'cell.id')
+DimPlot(aged.young.injury.integrated.rpca.injury.dpi.umap, pt.size = 1, label = T, group.by = 'condition.id')
+DimPlot(aged.young.injury.integrated.rpca.injury.dpi.umap, pt.size = 1, label = T, group.by = 'injury.dpi')
+DimPlot(aged.young.injury.integrated.rpca.injury.dpi.umap, pt.size = 1, label = T, group.by = 'replicate.number')
+
+
+exploratory.genelist <- c("Pax7", "Ttn", "Neb", "Pdgfra", "Pecam1", "Ache", "Chrna1", "Col22a1", "Myh1", "Myh4", "Myh2", "Myh3", "Myh8", 'Cd74')
+FeaturePlot(aged.young.injury.integrated.rpca.injury.dpi.umap, features = exploratory.genelist)
+
+#save(aged.young.injury.integrated.umap, file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/aged.young.injury.integrated.umap1.RData")
+```
+
+```{r}
+DimPlot(plotting.umap, label = T)
+```
+### Subset out clusters 0, 6, 9, 10 => These are immune and endothelial cells
+```{r}
+rpca.30dims.umap <- plotting.umap 
+
+rpca.30dims.umap.subset <- rpca.30dims.umap %>% subset(idents = c(0, 6, 9, 10), invert = T)
+```
+
+
+### Doubletfinder --- skip to below for further analysis
+```{r}
+library(DoubletFinder)
+```
+
+```{r}
+doublet_fun <- function(individual.seurat.obj)
+{
+  individual.seurat.obj <- NormalizeData(individual.seurat.obj, normalization.method = "LogNormalize", scale.factor = 10000)
+  individual.seurat.obj <- FindVariableFeatures(individual.seurat.obj, selection.method = "vst", nfeatures = 2000) #swapped this ahead of the scale_data 
+  individual.seurat.obj <- ScaleData(individual.seurat.obj, features = VariableFeatures(object = individual.seurat.obj) ) 
+  individual.seurat.obj <- RunPCA(individual.seurat.obj, features = VariableFeatures(object = individual.seurat.obj))
+  nExp <- round(ncol(individual.seurat.obj) * 0.1) # estimated 5% doublet contamination
+  individual.seurat.obj <- doubletFinder_v3(individual.seurat.obj, pN = 0.25, pK = 0.09, nExp = nExp, PCs = 1:10, sct = TRUE)
+  DF.name <<- colnames(individual.seurat.obj@meta.data)[grepl("DF.classification", colnames(individual.seurat.obj@meta.data))]
+  return(individual.seurat.obj)
+  return(DF.name)
+  print(cowplot::plot_grid(ncol = 2, DimPlot(individual.seurat.obj, group.by = "orig.ident",  reduction = 'pca') + NoAxes(),
+                           DimPlot(individual.seurat.obj, group.by = DF.name, reduction = 'pca') + NoAxes()))
+}
+
+```
+
+```{r}
+A0.obj <- doublet_fun(A0.obj)
+DimPlot(A0.obj, group.by = DF.name, reduction = 'pca')
+
+Y0.obj <- doublet_fun(Y0.obj)
+DimPlot(Y0.obj, group.by = DF.name, reduction = 'pca')
+
+#-----
+
+A4_R1.obj <- doublet_fun(A4_R1.obj)
+DimPlot(A4_R1.obj, group.by = DF.name, reduction = 'pca')
+
+A4E_R2.obj <- doublet_fun(A4E_R2.obj)
+DimPlot(A4E_R2.obj, group.by = DF.name, reduction = 'pca')
+
+A4_R3.obj <- doublet_fun(A4_R3.obj)
+DimPlot(A4_R3.obj, group.by = DF.name, reduction = 'pca')
+
+A7_R1.obj <- doublet_fun(A7_R1.obj)
+DimPlot(A7_R1.obj, group.by = DF.name, reduction = 'pca')
+
+A7_R2.obj <- doublet_fun(A7_R2.obj)
+DimPlot(A7_R2.obj, group.by = DF.name, reduction = 'pca')
+
+#-----
+
+Y4_R1.obj <- doublet_fun(Y4_R1.obj)
+DimPlot(Y4_R1.obj, group.by = DF.name, reduction = 'pca')
+
+Y4_R2.obj <- doublet_fun(Y4_R2.obj)
+DimPlot(Y4_R2.obj, group.by = DF.name, reduction = 'pca')
+
+Y7_R1.obj <- doublet_fun(Y7_R1.obj)
+DimPlot(Y7_R1.obj, group.by = DF.name, reduction = 'pca')
+
+Y7_R2.obj <- doublet_fun(Y7_R2.obj)
+DimPlot(Y7_R2.obj, group.by = DF.name, reduction = 'pca')
+
+
+
+```
+```{r}
+DimPlot(A0.obj, group.by = 'DF.classifications_0.25_0.09_118', reduction = 'pca')
+DimPlot(Y0.obj, group.by = 'DF.classifications_0.25_0.09_112', reduction = 'pca')
+DimPlot(A4_R1.obj, group.by = 'DF.classifications_0.25_0.09_20', reduction = 'pca')
+DimPlot(A4E_R2.obj, group.by = 'DF.classifications_0.25_0.09_783', reduction = 'pca')
+DimPlot(A7_R1.obj, group.by = 'DF.classifications_0.25_0.09_22', reduction = 'pca')
+DimPlot(A7_R2.obj, group.by = 'DF.classifications_0.25_0.09_2337', reduction = 'pca')
+DimPlot(Y4_R1.obj, group.by = 'DF.classifications_0.25_0.09_55', reduction = 'pca')
+DimPlot(Y4_R2.obj, group.by = 'DF.classifications_0.25_0.09_1056', reduction = 'pca')
+DimPlot(Y7_R1.obj, group.by = 'DF.classifications_0.25_0.09_26', reduction = 'pca')
+DimPlot(Y7_R2.obj, group.by = 'DF.classifications_0.25_0.09_1553', reduction = 'pca')
+
+```
+### Need to rename metada
+```{r}
+tmp <- A0.obj
+A0.obj$doubletfinder <- tmp[[colnames(tmp@meta.data[grepl("DF.classification", colnames(tmp@meta.data))])]][1]
+
+tmp <- Y0.obj
+Y0.obj$doubletfinder <- tmp[[colnames(tmp@meta.data[grepl("DF.classification", colnames(tmp@meta.data))])]][1]
+
+tmp <- A4_R1.obj
+A4_R1.obj$doubletfinder <- tmp[[colnames(tmp@meta.data[grepl("DF.classification", colnames(tmp@meta.data))])]][1]
+
+tmp <- A4E_R2.obj
+A4E_R2.obj$doubletfinder <- tmp[[colnames(tmp@meta.data[grepl("DF.classification", colnames(tmp@meta.data))])]][1]
+
+tmp <- A4_R3.obj
+A4_R3.obj$doubletfinder <- tmp[[colnames(tmp@meta.data[grepl("DF.classification", colnames(tmp@meta.data))])]][1]
+
+tmp <- A7_R1.obj
+A7_R1.obj$doubletfinder <- tmp[[colnames(tmp@meta.data[grepl("DF.classification", colnames(tmp@meta.data))])]][1]
+
+tmp <- A7_R2.obj
+A7_R2.obj$doubletfinder <- tmp[[colnames(tmp@meta.data[grepl("DF.classification", colnames(tmp@meta.data))])]][1]
+
+tmp <- Y4_R1.obj
+Y4_R1.obj$doubletfinder <- tmp[[colnames(tmp@meta.data[grepl("DF.classification", colnames(tmp@meta.data))])]][1]
+
+tmp <- Y4_R2.obj
+Y4_R2.obj$doubletfinder <- tmp[[colnames(tmp@meta.data[grepl("DF.classification", colnames(tmp@meta.data))])]][1]
+
+tmp <- Y7_R1.obj
+Y7_R1.obj$doubletfinder <- tmp[[colnames(tmp@meta.data[grepl("DF.classification", colnames(tmp@meta.data))])]][1]
+
+tmp <- Y7_R2.obj
+Y7_R2.obj$doubletfinder <- tmp[[colnames(tmp@meta.data[grepl("DF.classification", colnames(tmp@meta.data))])]][1]
+
+
+merged.with.doublets <- merge(Y0.obj, c(A0.obj, Y4_R1.obj, Y7_R1.obj, A4_R1.obj, A7_R1.obj, A4E_R2.obj, A4_R3.obj, A7_R2.obj, Y4_R2.obj, Y7_R2.obj))
+
+
+```
+
+```{r}
+save(Y0.obj, A0.obj, Y4_R1.obj, Y7_R1.obj, A4_R1.obj, A7_R1.obj, A4E_R2.obj, A4_R3.obj, A7_R2.obj, Y4_R2.obj, Y7_R2.obj,
+     file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/cleaned_objects_With_DOUBLETS.RData")
+
+save(merged.with.doublets,
+     file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/merged_object_With_DOUBLETS.RData")
+
+load(file = "~/Desktop/snRNAseq/PNAS_resubmission/Analysis/Kurland_snRNA_seq/R/R_objects/cleaned_objects_With_DOUBLETS.RData")
+```
+
+```{r}
+VlnPlot(Y0.obj, features = "nFeature_RNA", group.by = DF.name, pt.size = 0.1)
+```
+
+
+```{r}
+aged.young.injury.integrated.rpca.injury.dpi.umap$doubletfinder <- as.vector(merged.with.doublets$doubletfinder)
+
+DimPlot(aged.young.injury.integrated.rpca.injury.dpi.umap, group.by = 'doubletfinder')
+```
+
+### Now moving on -- subset out myogenic nuclei as before and recluster
+```{r}
+myogenic.subset.umap <- subset(aged.young.injury.integrated.rpca.injury.dpi.umap, Pax7 > 0 | Myod1 > 0 | Myog > 0 | Ckm > 0 |Mylk2 > 0)
+```
+
+```{r}
+dims = 1:15 # 15 looks good
+min.dist = 0.05
+n.neighbors = 200
+npcs = 30
+resolution = 0.2
+algorithim = 1
+
+
+
+  DefaultAssay(myogenic.subset.umap) <- "integrated"
+  myogenic.subset.umap <- ScaleData(myogenic.subset.umap, verbose = FALSE)
+  myogenic.subset.umap <- RunPCA(myogenic.subset.umap, npcs = npcs, verbose = FALSE)
+  myogenic.subset.umap <- RunUMAP(myogenic.subset.umap, reduction = "pca",  
+                                    n.neighbors = n.neighbors, 
+                                    min.dist = min.dist, 
+                                    dims = dims) 
+  myogenic.subset.umap <- FindNeighbors(myogenic.subset.umap)
+  myogenic.subset.umap <<- FindClusters(myogenic.subset.umap, resolution = resolution, algorithim = algorithim)
+  #return(integrated.rpca.object)
+
+  DefaultAssay(myogenic.subset.umap) <- "RNA"
+
+  #aged.young.injury.integrated.rpca.injury.dpi.umap <- rpca2.umap
+
+DimPlot(myogenic.subset.umap, pt.size = 1, label = T, group.by = 'cell.id')
+DimPlot(myogenic.subset.umap, pt.size = 1, label = T, group.by = 'condition.id')
+DimPlot(myogenic.subset.umap, pt.size = 1, label = T, group.by = 'injury.dpi')
+DimPlot(myogenic.subset.umap, pt.size = 1, label = T, group.by = 'replicate.number')
+DimPlot(myogenic.subset.umap, pt.size = 1, label = T, group.by = 'doubletfinder')
+
+
+
+exploratory.genelist <- c("Pax7", "Ttn", "Neb", "Pdgfra", "Pecam1", "Ache", "Chrna1", "Col22a1", "Myh1", "Myh4", "Myh2", "Myh3", "Myh8", 'Cd74')
+FeaturePlot(myogenic.subset.umap, features = exploratory.genelist)
+```
+### Try this again after REMOVING doublets
+```{r}
+dims = 1:15 # 15 looks good
+min.dist = 0.05
+n.neighbors = 200
+npcs = 30
+resolution = 0.2
+algorithim = 1
+
+### REMOVING DOUBLETS
+myogenic.subset.NO.DOUBLETS.umap <- myogenic.subset.umap[, myogenic.subset.umap$doubletfinder == "Singlet"] 
+
+  DefaultAssay(myogenic.subset.NO.DOUBLETS.umap) <- "integrated"
+  myogenic.subset.NO.DOUBLETS.umap <- ScaleData(myogenic.subset.NO.DOUBLETS.umap, verbose = FALSE)
+  myogenic.subset.NO.DOUBLETS.umap <- RunPCA(myogenic.subset.NO.DOUBLETS.umap, npcs = npcs, verbose = FALSE)
+  myogenic.subset.NO.DOUBLETS.umap <- RunUMAP(myogenic.subset.NO.DOUBLETS.umap, reduction = "pca",  
+                                    n.neighbors = n.neighbors, 
+                                    min.dist = min.dist, 
+                                    dims = dims) 
+  myogenic.subset.NO.DOUBLETS.umap <- FindNeighbors(myogenic.subset.NO.DOUBLETS.umap)
+  myogenic.subset.NO.DOUBLETS.umap <<- FindClusters(myogenic.subset.NO.DOUBLETS.umap, resolution = resolution, algorithim = algorithim)
+  #return(integrated.rpca.object)
+
+  DefaultAssay(myogenic.subset.NO.DOUBLETS.umap) <- "RNA"
+
+  #aged.young.injury.integrated.rpca.injury.dpi.umap <- rpca2.umap
+
+DimPlot(myogenic.subset.NO.DOUBLETS.umap, pt.size = 1, label = T, group.by = 'cell.id')
+DimPlot(myogenic.subset.NO.DOUBLETS.umap, pt.size = 1, label = T, group.by = 'condition.id')
+DimPlot(myogenic.subset.NO.DOUBLETS.umap, pt.size = 1, label = T, group.by = 'injury.dpi')
+DimPlot(myogenic.subset.NO.DOUBLETS.umap, pt.size = 1, label = T, group.by = 'replicate.number')
+DimPlot(myogenic.subset.NO.DOUBLETS.umap, pt.size = 1, label = T, group.by = 'doubletfinder')
+
+
+
+exploratory.genelist <- c("Pax7", "Ttn", "Neb", "Pdgfra", "Pecam1", "Ache", "Chrna1", "Col22a1", "Myh1", "Myh4", "Myh2", "Myh3", "Myh8", 'Cd74')
+FeaturePlot(myogenic.subset.NO.DOUBLETS.umap, features = exploratory.genelist)
+```
+### Maybe try adding in a Cd74(-) and Pecam1(-) --- seems there are a lot of these cells here
+
+
+### Monocle ###
+
+### Function
+```{r}
+main.function <- function(seurat.merged.obj, cth)
+{
+      data <- as(as.matrix(seurat.merged.obj@assays$RNA@data), 'sparseMatrix') 
+      pd <- new('AnnotatedDataFrame', data = seurat.merged.obj@meta.data)
+      fData <- data.frame(gene_short_name = row.names(data), row.names = row.names(data))
+      fd <- new('AnnotatedDataFrame', data = fData)
+      monocle.obj <- newCellDataSet(data,phenoData = pd,
+                                    featureData = fd,
+                                    lowerDetectionLimit = 0.5,
+                                    expressionFamily = negbinomial.size())
+
+      monocle.obj <- classifyCells(monocle.obj, cth, 0.1)
+      print(table(pData(monocle.obj)$CellType))
+      
+      monocle.obj <- detectGenes(monocle.obj, min_expr = 0.1)
+      expressed_genes.monocle.obj <- row.names(subset(fData(monocle.obj), num_cells_expressed >= 5))
+
+      monocle.obj <- estimateSizeFactors(monocle.obj)
+      monocle.obj <- estimateDispersions(monocle.obj)
+
+      marker_diff.monocle.obj <- markerDiffTable(monocle.obj[expressed_genes.monocle.obj,], 
+                                                 cth, 
+                                                 residualModelFormulaStr = "~num_genes_expressed")
+
+      diff_test_res.monocle.obj <- differentialGeneTest(monocle.obj[expressed_genes.monocle.obj,],
+                                                        fullModelFormulaStr = "~CellType")
+      
+      ordering_genes.monocle.obj <- row.names(subset(diff_test_res.monocle.obj, qval < 0.01))
+      
+      monocle.obj <- setOrderingFilter(monocle.obj, ordering_genes.monocle.obj)
+      
+      monocle.obj <- reduceDimension(monocle.obj, max_components = 3, num_dim = 3,
+        norm_method = 'log',
+        reduction_method = 'tSNE',
+        residualModelFormulaStr = "~CellType + num_genes_expressed",
+        verbose = T, 
+        check_duplicates = F)
+      
+      monocle.obj <- clusterCells(monocle.obj, num_clusters = 2)
+
+      monocle.obj <- reduceDimension(monocle.obj, 
+                                     max_components = 2,
+                                     method = 'DDRTree',
+                                     auto_param_selection = F)
+      
+      monocle.obj <- orderCells(monocle.obj, reverse = TRUE)
+      
+      monocle.new.name <<- monocle.obj 
+}
+```
+
+### Making cth
+```{r}
+x <- myogenic.subset.NO.DOUBLETS.umap
+data <- as(as.matrix(x@assays$RNA@data), 'sparseMatrix') 
+pd <- new('AnnotatedDataFrame', data = x@meta.data)
+fData <- data.frame(gene_short_name = row.names(data), row.names = row.names(data))
+fd <- new('AnnotatedDataFrame', data = fData)
+x <- newCellDataSet(data,phenoData = pd,featureData = fd,lowerDetectionLimit = 0.5,expressionFamily = negbinomial.size())
+
+pax7_id <- row.names(subset(fData(x), gene_short_name == "Pax7"))
+myf5_id <- row.names(subset(fData(x), gene_short_name == "Myf5"))
+myog_id <- row.names(subset(fData(x), gene_short_name == "Myog"))
+myod_id <- row.names(subset(fData(x), gene_short_name == "Myod1"))
+
+myh1_id <- row.names(subset(fData(x), gene_short_name == "Myh1"))
+myh2_id <- row.names(subset(fData(x), gene_short_name == "Myh2")) 
+myh4_id <- row.names(subset(fData(x), gene_short_name == "Myh4")) 
+
+tmem_id <- row.names(subset(fData(x), gene_short_name == "Tmem38a")) 
+
+
+cth <- newCellTypeHierarchy()
+cth <- addCellType(cth, "MuSC", classify_func = function(x) { x[pax7_id,] > 0  | x[myf5_id,] > 0 })
+cth <- addCellType(cth, "early", classify_func = function(x) { x[myod_id,] > 0 | x[myog_id,] > 0 })
+cth <- addCellType(cth, "Myonuclei", classify_func = function(x){ x[myh1_id,] > 0 | x[myh4_id,] > 0 | x[tmem_id,] > 0})
+```
+
+```{r}
+main.function(myogenic.subset.NO.DOUBLETS.umap, cth)
+myogenic.subset.NO.DOUBLETS.monocle <- monocle.new.name
+```
+
